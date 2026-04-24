@@ -1,0 +1,131 @@
+
+(rules PCB USB-pasthrough
+  (snap_angle 
+    fortyfive_degree
+  )
+  (autoroute_settings
+    (fanout off)
+    (autoroute on)
+    (postroute on)
+    (vias on)
+    (via_costs 50)
+    (plane_via_costs 5)
+    (start_ripup_costs 100)
+    (start_pass_no 30257)
+    (layer_rule F.Cu
+      (active on)
+      (preferred_direction vertical)
+      (preferred_direction_trace_costs 1.0)
+      (against_preferred_direction_trace_costs 2.6)
+    )
+    (layer_rule B.Cu
+      (active on)
+      (preferred_direction horizontal)
+      (preferred_direction_trace_costs 1.0)
+      (against_preferred_direction_trace_costs 1.6)
+    )
+  )
+  (rule
+    (width 250.0)
+    (clearance 200.2)
+    (clearance 125.0 (type smd_to_turn_gap))
+    (clearance 200.2 (type smd))
+    (clearance 200.2 (type "kicad_default"))
+    (clearance 200.2 (type "USB_FS"))
+    (clearance 200.2 (type "USB_HS"))
+    (clearance 200.2 (type kicad))
+    (clearance 200.2 (type USB))
+    (clearance 200.2 (type FS))
+    (clearance 200.2 (type HS))
+  )
+  (padstack "Via[0-1]_800:400_um"
+    (shape
+      (circle F.Cu 800.0 0.0 0.0)
+    )
+    (shape
+      (circle B.Cu 800.0 0.0 0.0)
+    )
+    (attach off)
+  )
+  (via 
+    "Via[0-1]_800:400_um" "Via[0-1]_800:400_um" default
+  )
+  (via 
+    "Via[0-1]_800:400_um-kicad_default" "Via[0-1]_800:400_um" "kicad_default"
+  )
+  (via 
+    "Via[0-1]_800:400_um-USB_FS" "Via[0-1]_800:400_um" "USB_FS"
+  )
+  (via 
+    "Via[0-1]_800:400_um-USB_HS" "Via[0-1]_800:400_um" "USB_HS"
+  )
+  (via_rule
+    default "Via[0-1]_800:400_um"
+  )
+  (via_rule
+    "kicad_default" "Via[0-1]_800:400_um-kicad_default"
+  )
+  (via_rule
+    "USB_FS" "Via[0-1]_800:400_um-USB_FS"
+  )
+  (via_rule
+    "USB_HS" "Via[0-1]_800:400_um-USB_HS"
+  )
+  (class default
+    GND +3V3 "Net-(C3-Pad2)" "Net-(C5-Pad2)" "Net-(C7-Pad2)" "Net-(C13-Pad1)" "Net-(C1-Pad1)" "Net-(C10-Pad1)"
+    "Net-(C14-Pad2)" /nRESET "/VCAP_1" +5V /VDDA /V12PHYHS "Net-(C23-Pad1)" "Net-(C23-Pad2)"
+    "/VBUS_PWR" "/VBUS_DATA" "Net-(F2-Pad2)" "Net-(F3-Pad2)" "Net-(J1-PadA5)" "Net-(J1-PadB5)" "Net-(J2-Pad2)" "unconnected-(J5-Pad2)"
+    "/SPI1_SCK" "/SPI1_MISO" "/SPI1_MOSI" "/LCD_CS" "/LCD_DC" "/LCD_RST" "/LCD_BL" /SWDIO
+    /SWCLK /SWO "unconnected-(J7-Pad7)" "unconnected-(J7-Pad8)" "Net-(J8-PadA5)" "unconnected-(J8-PadA8)" "Net-(J8-PadB5)" "unconnected-(J8-PadB8)"
+    "/MMC1_D2" "/MMC1_D3" "/MMC1_CMD" "/MMC1_CLK" "/MMC1_D0" "/MMC1_D1" "/MMC1_CDET" "Net-(LED1-Pad2)"
+    "Net-(LED2-Pad2)" "Net-(LED3-Pad2)" "Net-(LED4-Pad2)" "/LED5_R" "Net-(R2-Pad1)" "/LED5_G" "Net-(R3-Pad1)" "/LED5_B"
+    /PA13 /PA14 /LED2 /LED3 /LED4 "unconnected-(U1-Pad3)" "unconnected-(U1-Pad4)" "unconnected-(U1-Pad5)"
+    "unconnected-(U1-Pad7)" "unconnected-(U1-Pad8)" "unconnected-(U1-Pad9)" "unconnected-(U1-Pad15)" "unconnected-(U1-Pad16)" "unconnected-(U1-Pad17)" "unconnected-(U1-Pad18)" "unconnected-(U1-Pad22)"
+    "unconnected-(U1-Pad23)" "unconnected-(U1-Pad24)" "unconnected-(U1-Pad25)" "unconnected-(U1-Pad32)" "unconnected-(U1-Pad33)" "unconnected-(U1-Pad34)" "unconnected-(U1-Pad35)" "unconnected-(U1-Pad36)"
+    "unconnected-(U1-Pad37)" "unconnected-(U1-Pad38)" "unconnected-(U1-Pad39)" "unconnected-(U1-Pad40)" "unconnected-(U1-Pad41)" "unconnected-(U1-Pad42)" "unconnected-(U1-Pad43)" "unconnected-(U1-Pad44)"
+    "unconnected-(U1-Pad45)" "unconnected-(U1-Pad46)" "unconnected-(U1-Pad47)" "unconnected-(U1-Pad51)" "unconnected-(U1-Pad52)" "unconnected-(U1-Pad58)" "unconnected-(U1-Pad59)" "unconnected-(U1-Pad60)"
+    "unconnected-(U1-Pad61)" "unconnected-(U1-Pad62)" "unconnected-(U1-Pad63)" "unconnected-(U1-Pad64)" "unconnected-(U1-Pad81)" "unconnected-(U1-Pad82)" "unconnected-(U1-Pad84)" "unconnected-(U1-Pad85)"
+    "unconnected-(U1-Pad86)" "unconnected-(U1-Pad87)" "unconnected-(U1-Pad88)" "unconnected-(U1-Pad93)" "unconnected-(U1-Pad95)" "unconnected-(U1-Pad96)" "/VCAP_2" "Net-(C20-Pad1)"
+    "Net-(F1-Pad2)" "Net-(R11-Pad2)" "Net-(R1-Pad2)" "Net-(R10-Pad1)"
+    (clearance_class default)
+    (via_rule default)
+    (rule
+      (width 250.0)
+    )
+    (circuit 
+      (use_layer F.Cu B.Cu)
+    )
+  )
+  (class "kicad_default"
+    (clearance_class "kicad_default")
+    (via_rule "kicad_default")
+    (rule
+      (width 250.0)
+    )
+    (circuit 
+      (use_layer F.Cu B.Cu)
+    )
+  )
+  (class "USB_FS"
+    /USBA+ "/USBA-"
+    (clearance_class "USB_FS")
+    (via_rule "USB_FS")
+    (rule
+      (width 250.0)
+    )
+    (circuit 
+      (use_layer F.Cu B.Cu)
+    )
+  )
+  (class "USB_HS"
+    /USBC+ "/USBC-"
+    (clearance_class "USB_HS")
+    (via_rule "USB_HS")
+    (rule
+      (width 250.0)
+    )
+    (circuit 
+      (use_layer F.Cu B.Cu)
+    )
+  )
+)

@@ -1,0 +1,45 @@
+# Temporary and Backup files
+*.000
+*.bak
+*.bck
+*.kicad_pcb-bak
+*.kicad_sch-bak
+*-backups/
+*-cache*
+*-bak
+*~
+_autosave-*
+*.tmp
+fp-info-cache
+~*.lck
+logs/
+report.txt
+
+# Netlist and Autorouter files (Generated, not source)
+*.net
+*.dsn
+*.ses
+*.frb
+
+# Exported Outputs (Often excluded to keep repo clean)
+*.xml
+*.csv
+
+# Local Project Settings (Specific to your machine)
+*.kicad_prl
+.history/
+
+# Optional: Fabrication outputs (uncomment if you want to ignore them)
+# /plots/
+# /gerbers/ but not the zip uploaded to the FAB House
+*.gbl
+*.gbs
+*.gbp
+*.gbo
+*.gm1
+*.gtl
+*.gts
+*.gtp
+*.gto
+*.gbrjob
+*.drl
