@@ -1,3 +1,26 @@
+# KiCad backups and autosave
+*.kicad_sch-bak
+*.kicad_pcb-bak
+*.kicad_sch.bak
+*.kicad_pcb.bak
+*-backups/
+_autosave-*
+
+# FreeRouting files
+*.dsn
+*.ses
+*.frb
+
+# KiCad cache and local settings
+fp-info-cache
+*.kicad_prl
+
+# KiCad generated outputs
+*.xml
+*.csv
+report.txt
+kicad/logs/
+
 # Rust build artifacts
 /target/
 **/*.rs.bk
