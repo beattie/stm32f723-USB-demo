@@ -6845,7 +6845,7 @@
     (property "Value" "GND" (id 1) (at 43.18 53.8479 0)
       (effects (font (size 1.27 1.27)) (justify left))
     )
-    (property "Footprint" "TestPoint:TestPoint_THTPad_4.0x4.0mm_Drill2.0mm" (id 2) (at 45.72 55.88 0)
+    (property "Footprint" "TestPoint:TestPoint_THTPad_D2.0mm_Drill1.0mm" (id 2) (at 45.72 55.88 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (property "Datasheet" "~" (id 3) (at 45.72 55.88 0)
@@ -7787,7 +7787,7 @@
       (reference "SW2") (unit 1) (value "Reset") (footprint "Library:SW_Push_6mm_2pin_5.08mm")
     )
     (path "/c65cc65e-11e7-41cb-818c-ff91bd78cb55"
-      (reference "TP1") (unit 1) (value "GND") (footprint "TestPoint:TestPoint_THTPad_4.0x4.0mm_Drill2.0mm")
+      (reference "TP1") (unit 1) (value "GND") (footprint "TestPoint:TestPoint_THTPad_D2.0mm_Drill1.0mm")
     )
     (path "/57957047-6ff8-4cff-8aa3-72cb6cedeade"
       (reference "TP2") (unit 1) (value "V12PHYHS") (footprint "TestPoint:TestPoint_Pad_D1.0mm")
