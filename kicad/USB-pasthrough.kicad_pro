@@ -55,12 +55,7 @@
           "width": 0.0
         }
       ],
-      "drc_exclusions": [
-        "silk_over_copper|63540000|150000000|8dc6cb4c-14aa-471a-a87c-728e7dcd5791|423107db-eaf6-4926-b5d4-c19c3515b4ed",
-        "silk_over_copper|66305000|50000000|8dc6cb4c-14aa-471a-a87c-728e7dcd5791|7f9d2d67-75a6-4181-b334-1ca6f29f105b",
-        "silk_over_copper|75495000|50000000|8dc6cb4c-14aa-471a-a87c-728e7dcd5791|cc77cebf-0ca4-4ebb-bbe9-f2e9c272ce2a",
-        "silk_over_copper|76860000|150000000|8dc6cb4c-14aa-471a-a87c-728e7dcd5791|e8640a30-6c84-4918-8857-c4df3fc47201"
-      ],
+      "drc_exclusions": [],
       "meta": {
         "version": 2
       },
@@ -426,7 +421,7 @@
       "gencad": "",
       "idf": "",
       "netlist": "",
-      "specctra_dsn": "USB-pasthrough.dsn",
+      "specctra_dsn": "USB-pasthrough-2.dsn",
       "step": "",
       "vrml": ""
     },
