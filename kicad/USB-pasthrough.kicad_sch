@@ -6357,7 +6357,7 @@
     (uuid 853cd0b6-3a7d-4782-8733-3d029001cd41)
     (property "Reference" "LED2" (id 0) (at 200.66 25.4 0))
     (property "Value" "BLUE" (id 1) (at 201.93 17.78 0))
-    (property "Footprint" "Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder" (id 2) (at 200.66 22.86 0)
+    (property "Footprint" "LED_SMD:LED_0603_1608Metric_Pad1.05x0.95mm_HandSolder" (id 2) (at 200.66 22.86 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (property "Datasheet" "~" (id 3) (at 200.66 22.86 0)
@@ -7925,7 +7925,7 @@
       (reference "LED1") (unit 1) (value "RED") (footprint "LED_SMD:LED_0603_1608Metric_Pad1.05x0.95mm_HandSolder")
     )
     (path "/853cd0b6-3a7d-4782-8733-3d029001cd41"
-      (reference "LED2") (unit 1) (value "BLUE") (footprint "Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder")
+      (reference "LED2") (unit 1) (value "BLUE") (footprint "LED_SMD:LED_0603_1608Metric_Pad1.05x0.95mm_HandSolder")
     )
     (path "/0632b20a-c535-4fb7-8481-f3fee13a0c59"
       (reference "LED3") (unit 1) (value "GREEN") (footprint "LED_SMD:LED_0603_1608Metric_Pad1.05x0.95mm_HandSolder")
