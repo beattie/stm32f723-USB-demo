@@ -4797,7 +4797,7 @@
   (symbol (lib_id "Jumper:Jumper_2_Open") (at 76.2 121.92 0) (mirror y) (unit 1)
     (in_bom yes) (on_board yes)
     (uuid 1586b523-a3cf-43e8-bf9d-0533c598fcc1)
-    (property "Reference" "ID2" (id 0) (at 76.2 120.65 0))
+    (property "Reference" "ID4" (id 0) (at 76.2 120.65 0))
     (property "Value" "Jumper_2_Bridged" (id 1) (at 76.2 118.11 0)
       (effects (font (size 1.27 1.27)) hide)
     )
@@ -4884,7 +4884,7 @@
   (symbol (lib_id "Jumper:Jumper_2_Bridged") (at 76.2 119.38 0) (mirror y) (unit 1)
     (in_bom yes) (on_board yes)
     (uuid 1858f103-0550-4454-a9a8-cb3c44998e1e)
-    (property "Reference" "ID1" (id 0) (at 76.2 118.11 0))
+    (property "Reference" "ID5" (id 0) (at 76.2 118.11 0))
     (property "Value" "Jumper_2_Bridged" (id 1) (at 76.2 115.57 0)
       (effects (font (size 1.27 1.27)) hide)
     )
@@ -6419,7 +6419,7 @@
   (symbol (lib_id "Jumper:Jumper_2_Bridged") (at 76.2 127 0) (mirror y) (unit 1)
     (in_bom yes) (on_board yes)
     (uuid 8b9373f4-2597-4d9f-8245-62eb92cb212f)
-    (property "Reference" "ID5" (id 0) (at 76.2 125.73 0))
+    (property "Reference" "ID2" (id 0) (at 76.2 125.73 0))
     (property "Value" "Jumper_2_Bridged" (id 1) (at 76.2 123.19 0)
       (effects (font (size 1.27 1.27)) hide)
     )
@@ -6452,7 +6452,7 @@
   (symbol (lib_id "Jumper:Jumper_2_Bridged") (at 76.2 124.46 0) (mirror y) (unit 1)
     (in_bom yes) (on_board yes)
     (uuid 8d554622-7ff9-41d4-a107-16b60e1fce82)
-    (property "Reference" "ID4" (id 0) (at 76.2 123.19 0))
+    (property "Reference" "ID3" (id 0) (at 76.2 123.19 0))
     (property "Value" "Jumper_2_Bridged" (id 1) (at 76.2 120.65 0)
       (effects (font (size 1.27 1.27)) hide)
     )
@@ -6575,7 +6575,7 @@
   (symbol (lib_id "Jumper:Jumper_2_Bridged") (at 76.2 129.54 0) (mirror y) (unit 1)
     (in_bom yes) (on_board yes)
     (uuid 95c1312c-0851-4fe5-a936-d7533c7cbaf8)
-    (property "Reference" "ID2" (id 0) (at 76.2 128.27 0))
+    (property "Reference" "ID1" (id 0) (at 76.2 128.27 0))
     (property "Value" "Jumper_2_Bridged" (id 1) (at 76.2 125.73 0)
       (effects (font (size 1.27 1.27)) hide)
     )
@@ -7862,19 +7862,19 @@
     (path "/accccdd8-12e2-4161-b10b-5bfef537426e"
       (reference "H4") (unit 1) (value "MountingHole") (footprint "MountingHole:MountingHole_2.2mm_M2_Pad")
     )
-    (path "/1858f103-0550-4454-a9a8-cb3c44998e1e"
+    (path "/95c1312c-0851-4fe5-a936-d7533c7cbaf8"
       (reference "ID1") (unit 1) (value "Jumper_2_Bridged") (footprint "Jumper:SolderJumper-2_P1.3mm_Bridged_Pad1.0x1.5mm")
     )
-    (path "/1586b523-a3cf-43e8-bf9d-0533c598fcc1"
-      (reference "ID2") (unit 1) (value "Jumper_2_Bridged") (footprint "Jumper:SolderJumper-2_P1.3mm_Open_Pad1.0x1.5mm")
-    )
-    (path "/95c1312c-0851-4fe5-a936-d7533c7cbaf8"
+    (path "/8b9373f4-2597-4d9f-8245-62eb92cb212f"
       (reference "ID2") (unit 1) (value "Jumper_2_Bridged") (footprint "Jumper:SolderJumper-2_P1.3mm_Bridged_Pad1.0x1.5mm")
     )
     (path "/8d554622-7ff9-41d4-a107-16b60e1fce82"
-      (reference "ID4") (unit 1) (value "Jumper_2_Bridged") (footprint "Jumper:SolderJumper-2_P1.3mm_Bridged_Pad1.0x1.5mm")
+      (reference "ID3") (unit 1) (value "Jumper_2_Bridged") (footprint "Jumper:SolderJumper-2_P1.3mm_Bridged_Pad1.0x1.5mm")
     )
-    (path "/8b9373f4-2597-4d9f-8245-62eb92cb212f"
+    (path "/1586b523-a3cf-43e8-bf9d-0533c598fcc1"
+      (reference "ID4") (unit 1) (value "Jumper_2_Bridged") (footprint "Jumper:SolderJumper-2_P1.3mm_Open_Pad1.0x1.5mm")
+    )
+    (path "/1858f103-0550-4454-a9a8-cb3c44998e1e"
       (reference "ID5") (unit 1) (value "Jumper_2_Bridged") (footprint "Jumper:SolderJumper-2_P1.3mm_Bridged_Pad1.0x1.5mm")
     )
     (path "/7cf7e8fc-d4c5-4161-b905-d74139026239"
