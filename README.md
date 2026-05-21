@@ -2,7 +2,7 @@
 
 A hardware and firmware demonstration platform based on the STM32F723VET6, a Cortex-M7
 with an embedded USB HS PHY. Inspired by the [Pastilda](https://github.com/nickcoutsos/pastilda)
-project, with a goal of providing robust Linux support for USB keyboard passthrough.
+project, with a goal of providing robust Linux support for USB keyboard passthrough. This project was started as a vehicle to learn Rust and keep my USB up-to date as well as display my limited HW design abilities.
 
 ## Concept
 
