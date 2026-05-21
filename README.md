@@ -24,8 +24,8 @@ full-speed USB HS without an external PHY chip.
 - SWD debug header
 
 **Hardware versions:**
-- Rev 0.1 — 2-layer board, initial bring-up
-- Rev 0.2 — 4-layer board (F.Cu / GND / 3V3 / B.Cu), revised layout (in progress)
+- Rev 0.1 — 2-layer board, initial bring-up (bring-up in progress)
+- Rev 0.2 — 4-layer board (F.Cu / GND / 3V3 / B.Cu), revised layout (design in progress)
 
 PCB gerbers for Rev 0.1 are in `kicad/gerbers/`.
 
