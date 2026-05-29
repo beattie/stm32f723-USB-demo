@@ -1,0 +1,11 @@
+*.o
+*.bin
+*.elf
+
+# VS Code generated
+.vscode/*.log
+
+# Neovim
+*.swp
+*.swo
+*~
