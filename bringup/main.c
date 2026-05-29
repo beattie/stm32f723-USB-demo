@@ -28,7 +28,7 @@ static void delay(volatile uint32_t n) {
     while (n--) __asm__("nop");
 }
 
-void main(void) {
+int main(void) {
     /* enable GPIOB and GPIOE clocks */
     RCC_AHB1ENR |= RCC_AHB1ENR_GPIOBEN | RCC_AHB1ENR_GPIOEEN;
 
@@ -61,4 +61,5 @@ void main(void) {
         step++;
         delay(500000);  /* ~HSI 16MHz, adjust as needed */
     }
+	return 0;
 }
