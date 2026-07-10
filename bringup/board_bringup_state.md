@@ -60,17 +60,11 @@ JTAG errors in output are normal — probe-rs tries JTAG first then falls back t
 
 ## Next Steps
 
-### 1. Flash minimal blink firmware
-Verify the full flash pipeline and confirm clock tree comes up correctly.
+### ~~1. Flash minimal blink firmware~~ — DONE (2026-07-10)
+LED chase firmware flashed and verified: blue LED confirmed blinking. Flash pipeline, HSI16 clock tree, and GPIO all working.
 
-- Toolchain: arm-none-eabi-gcc (or Rust/Embassy)
-- Framework: STM32CubeF7 HAL or bare metal with CMSIS
-- Target: toggle a GPIO (check schematic for available LED or test point)
-- Flash with: `probe-rs download --chip STM32F723VETx --probe 1fc9:0090 firmware.elf`
-- Verify with: `probe-rs run` or observe LED
-
-### 2. Clock tree verification
-STM32F723 has HSI (16MHz internal) and supports external HSE. Confirm which clock source is available on this board and configure accordingly.
+### 2. ~~Clock tree verification~~ — DONE (2026-07-10)
+HSI16 running, GPIO outputs confirmed functional.
 
 ### 3. USB bring-up
 After blink works:
