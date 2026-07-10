@@ -42,10 +42,10 @@ Pictures/   board photos
 | LED5_B   | PB6  | RGB BLUE |
 | SWDIO    | PA13 | Debug |
 | SWCLK    | PA14 | Debug |
-| USBA+    | PB15 (pin 71) | USB-A host D+ |
-| USBA-    | PB14 (pin 70) | USB-A host D- (pin 69 disconnected — OK) |
-| USBC+    | PB15 | USB-C device D+ |
-| USBC-    | PB14 | USB-C device D- |
+| USBA+    | PA12 (pin 71) | USB-A host D+ — OTG_FS |
+| USBA-    | PA11 (pin 70) | USB-A host D- — OTG_FS |
+| USBC+    | PB15 (pin 57) | USB-C device D+ — OTG_HS internal FS PHY |
+| USBC-    | PB14 (pin 56) | USB-C device D- — OTG_HS internal FS PHY |
 | MMC1_CLK | ?    | SD card clock |
 | MMC1_CMD | ?    | SD card command |
 | MMC1_D0-3| ?    | SD card data |
