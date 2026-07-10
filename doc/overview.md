@@ -109,6 +109,12 @@ the device architecture well:
 
 ## Related Projects
 
+**Pastilda** ([github.com/s-kostyuk/pastilda](https://github.com/s-kostyuk/pastilda)):
+The original inspiration for the USB interposer concept. An open-source USB HID
+passthrough password manager — physical keyboard plugs into the device, which
+forwards keystrokes to the host and can inject credentials on demand. This project
+follows the same fundamental architecture.
+
 **stm32f746-disc** (`~/projects/stm32f746-disc`): Rust/Embassy proof-of-concept on
 the STM32F746G-DISCO development board. USB passthrough and password manager logic
 is implemented here. The STM32F723 firmware is a port of this work to the custom
