@@ -70,7 +70,7 @@ Pictures/   board photos
 - [x] Smoke test — SWD connects, VCAP reads 1.2V, VDD 3.285V, VDDA 3.2V
 - [x] LED chase firmware written and verified (bringup/main.c) — blue LED confirmed blinking 2026-07-10
 - [x] Install FB2 + C23 + C24 (VDDPHYHS filter, parallel cap fix) — done 2026-07-10
-- [ ] Bodge R19, install LED2 — flash LED2 blink on PE0
+- [x] Bodge R19/R22/R23, install LED2/3/4 — all four LEDs verified 2026-07-10
 - [ ] USB-A host bring-up
 - [ ] USB-C device bring-up
 - [ ] MicroSD bring-up
