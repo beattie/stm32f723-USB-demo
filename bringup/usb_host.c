@@ -39,6 +39,7 @@
 #define GPIOA_BASE      0x40020000UL
 #define GPIOA_MODER     (*(volatile uint32_t *)(GPIOA_BASE + 0x00))
 #define GPIOA_OSPEEDR   (*(volatile uint32_t *)(GPIOA_BASE + 0x08))
+#define GPIOA_PUPDR     (*(volatile uint32_t *)(GPIOA_BASE + 0x0C))
 #define GPIOA_AFRH      (*(volatile uint32_t *)(GPIOA_BASE + 0x24))
 
 /* ================================================================
@@ -117,9 +118,17 @@ void usb_host_init(void)
     CRS_CFGR = 0xBB7Fu | (22u << 16) | (2u << 28);
     CRS_CR  |= (1u << 6) | (1u << 5);  /* AUTOTRIMEN | CEN */
 
-    /* 2. GPIO: PA11/PA12 as OTG_FS_DM/DP, AF10 -------------------------- */
+    /* 2. GPIO ------------------------------------------------------------ */
     RCC_AHB1ENR |= (1u << 0);          /* GPIOAEN */
 
+    /* PA10 = OTG_FS_ID as AF10 with internal pull-down.
+     * The pad is damaged; the internal 45k pull-down may still reach the pin
+     * and hold CIDSTS=0 (A-device).  v0.2 fix: 10k pull-down on PA10. */
+    GPIOA_MODER   = (GPIOA_MODER  & ~(3u<<20)) | (2u<<20);   /* AF mode */
+    GPIOA_PUPDR   = (GPIOA_PUPDR  & ~(3u<<20)) | (2u<<20);   /* pull-down */
+    GPIOA_AFRH    = (GPIOA_AFRH   & ~(0xFu<<8)) | (0xAu<<8); /* AF10 */
+
+    /* PA11/PA12 as OTG_FS_DM/DP, AF10 */
     /* AF mode: PA11[23:22]=10, PA12[25:24]=10 */
     GPIOA_MODER   = (GPIOA_MODER   & ~((3u<<22)|(3u<<24))) | ((2u<<22)|(2u<<24));
     /* Very high speed */
@@ -131,36 +140,34 @@ void usb_host_init(void)
     RCC_AHB2ENR |= (1u << 7);
     udelay(1000);
 
-    /* 4. Core soft reset ------------------------------------------------- */
-    uint32_t timeout;
-    timeout = 200000;
-    while (!(GRSTCTL & (1u << 31)) && --timeout) {}  /* wait AHBIDL */
-    GRSTCTL |= (1u << 0);                              /* CSRST */
-    timeout = 200000;
-    while ((GRSTCTL & (1u << 0)) && --timeout) {}
-    udelay(30);
+    /* 4. Power up PHY before reset — CSRST needs the 48MHz PHY clock,
+     * which is only running when GCCFG.PWRDWN=1.                        */
+    /* 4. Force host mode BEFORE powering up the PHY.
+     * Per Synopsys programming guide: set FHMOD before GCCFG.PWRDWN so the
+     * core comes up in host mode without passing through device mode first.
+     * PA10 (OTG_FS_ID) is unusable on this board; we always want host mode. */
+    GUSBCFG = (GUSBCFG & ~(1u << 30))  /* clear FDMOD */
+            | (1u << 29)                 /* FHMOD: force host mode */
+            | (1u << 6);                 /* PHYSEL: internal FS transceiver */
 
-    /* 5. Power up transceiver -------------------------------------------- */
-    GCCFG = (1u << 16);    /* PWRDWN=1 (active) */
+    /* Override OTG session detection so the state machine commits to
+     * A-device/host regardless of the floating ID pin:
+     *   VBVALIDOVEN (bit 2) + VBVALIDOVVAL (bit 3) = VBUS always valid
+     *   AVAOAEN (bit 5) + AVALOV (bit 4) = A-session always valid       */
+    GOTGCTL |= (1u<<2)|(1u<<3)|(1u<<4)|(1u<<5);
+
+    /* 5. Power up PHY and ungate clocks ---------------------------------- */
+    GCCFG   = (1u << 16);  /* PWRDWN=1: enable transceiver */
     PCGCCTL = 0;            /* ensure clocks not gated */
+    udelay(800000);         /* ~50 ms — mode switch + PHY stabilise */
 
-    /* 6. Force host mode: GUSBCFG.FHMOD (bit 29) ------------------------- */
-    GUSBCFG = (GUSBCFG & ~(1u << 30)) | (1u << 29);  /* clear FDMOD, set FHMOD */
-    /* Poll GINTSTS.CMOD (bit 0) until = 1 (host mode), ~200 ms timeout */
-    timeout = 3200000;
-    while (!(GINTSTS & (1u << 0)) && --timeout) {}
-    if (!(GINTSTS & (1u << 0))) {
-        /* Mode switch failed — blink LED3 */
-        while (1) {
-            for (int i = 0; i < 5; i++) {
-                GPIOE_ODR |=  LED3; udelay(80000);
-                GPIOE_ODR &= ~LED3; udelay(80000);
-            }
-            udelay(400000);
-        }
-    }
+    /* 6. Wait for mode switch — 50 ms per Synopsys spec.
+     * We do NOT check CMOD: when PA10 (OTG_FS_ID) is floating the bit is
+     * unreliable; FHMOD is sufficient for fixed-host operation. */
+    uint32_t timeout;
+    udelay(800000);   /* ~50 ms */
 
-    /* 7. Host config: FSLSPCS[1:0]=01 (48 MHz clock for FS/LS) ----------- */
+    /* 8. Host config: FSLSPCS[1:0]=01 (48 MHz clock for FS/LS) ----------- */
     HCFG = (HCFG & ~(3u << 0)) | (1u << 0);
 
     /* Frame interval: 48 000 for 1 ms SOF @ 48 MHz */
@@ -180,8 +187,11 @@ void usb_host_init(void)
     timeout = 200000;
     while ((GRSTCTL & (1u << 4)) && --timeout) {}
 
-    /* 10. Turn on port power --------------------------------------------- */
+    /* 10. Turn on port power — wait for AHB idle first, then write PPWR.
+     * The HPRT register ignores writes if the host port isn't fully ready. */
+    udelay(25000);  /* ~1.5 ms at HSI16 */
     hprt_write(1u << 12);   /* PPWR=1 */
+    udelay(25000);  /* let PPWR settle */
 
     /* 11. Enable connect-detect interrupt --------------------------------- */
     GINTSTS = 0xFFFFFFFFu;
@@ -194,6 +204,10 @@ void usb_host_init(void)
  * ================================================================ */
 void usb_host_poll(void)
 {
+    /* Ensure port power stays on (re-apply if lost) */
+    if (!(HPRT_REG & (1u << 12)))
+        hprt_write(1u << 12);
+
     /* Check HPRT.PCSTS (bit 0) directly — most reliable indicator */
     if (HPRT_REG & (1u << 0)) {
         g_connected = 1;

@@ -9,7 +9,7 @@ CFLAGS += -nostdlib
 
 LDFLAGS = -T stm32f723.ld -nostdlib -Wl,--gc-sections
 
-SRCS = main.c startup.c usb_host.c sdcard.c
+SRCS = main.c startup.c usb_host.c usb_device.c sdcard.c
 OBJS = $(SRCS:.c=.o)
 
 all: $(TARGET).elf $(TARGET).bin
@@ -24,8 +24,8 @@ $(TARGET).bin: $(TARGET).elf
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 flash: $(TARGET).elf
-	probe-rs download --chip STM32F723VETx --probe 0483:374b $(TARGET).elf
-	probe-rs reset --chip STM32F723VETx --probe 0483:374b
+	probe-rs download --chip STM32F723VETx --probe 1fc9:0090 $(TARGET).elf
+	probe-rs reset --chip STM32F723VETx --probe 1fc9:0090
 
 clean:
 	rm -f $(OBJS) $(TARGET).elf $(TARGET).bin

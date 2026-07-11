@@ -64,7 +64,7 @@ Pictures/   board photos
 - LED current limiter footprints: R_0201_0603Metric where 0603 imperial needed
 - VDDA bypass caps were in series (schematic bug) — workaround applied
 - VDDPHYHS caps same series bug — apply same fix when installing FB2/C23/C24
-- Pin 69 (LCD_RST) disconnected — not a problem, LCD_RST not needed for demo
+- Pin 69 (LCD_RST / PA10) disconnected — not a problem for LCD, but PA10 is OTG_FS_ID; floating ID pin keeps OTG core in B-device/device mode. **v0.1 bodge: wire PA10 to GND. v0.2 fix: add 10kΩ pull-down on PA10.**
 - No UART on board — use SWO/ITM via J7 for debug output
 
 ## Bring-Up Status

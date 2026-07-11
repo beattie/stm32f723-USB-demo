@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include "usb_host.h"
+#include "usb_device.h"
 #include "sdcard.h"
 
 /* RCC */
@@ -39,9 +40,10 @@ int main(void) {
     }
     delay(400000);
 
-    /* Initialise USB-A host (OTG_FS, PA11/PA12) and MicroSD (SDMMC1) */
-    usb_host_init();
-    sdcard_init();
+    /* Initialise peripherals */
+    usb_host_init();    /* OTG_FS  — USB-A host,   PA11/PA12 */
+    usb_device_init();  /* OTG_HS  — USB-C device, PB14/PB15 */
+    sdcard_init();      /* SDMMC1  — MicroSD,      PC8-12/PD2 */
 
     /* Main loop:
      *   usb_host_poll() updates LED2 (USB-A device connected)
@@ -51,6 +53,7 @@ int main(void) {
     uint32_t counter = 0;
     while (1) {
         usb_host_poll();
+        usb_device_poll();
         sdcard_poll();
         if (++counter >= 200000) {
             counter = 0;
