@@ -1,5 +1,6 @@
 #include <stdint.h>
-#include "usb_dev.h"
+#include "usb_host.h"
+#include "sdcard.h"
 
 /* RCC */
 #define RCC_BASE        0x40023800UL
@@ -11,9 +12,9 @@
 #define GPIOE_ODR       (*(volatile uint32_t *)(GPIOE_BASE + 0x14))
 
 /* LED bit masks */
-#define LED2    (1u << 0)   /* PE0 — BLUE */
-#define LED3    (1u << 1)   /* PE1 — GREEN */
-#define LED4    (1u << 2)   /* PE2 — YELLOW */
+#define LED2    (1u << 0)   /* PE0 — BLUE   — USB-A connected */
+#define LED3    (1u << 1)   /* PE1 — GREEN  — SD card ready */
+#define LED4    (1u << 2)   /* PE2 — YELLOW — heartbeat */
 
 static void delay(volatile uint32_t n) {
     while (n--) __asm__("nop");
@@ -38,13 +39,19 @@ int main(void) {
     }
     delay(400000);
 
-    /* Initialise USB-C device (OTG_HS FS, PB14/PB15) */
-    usb_dev_init();
+    /* Initialise USB-A host (OTG_FS, PA11/PA12) and MicroSD (SDMMC1) */
+    usb_host_init();
+    sdcard_init();
 
-    /* Main loop: poll USB events; blink LED4 as ~1 Hz heartbeat */
+    /* Main loop:
+     *   usb_host_poll() updates LED2 (USB-A device connected)
+     *   sdcard_poll()   updates LED3 (SD card ready)
+     *   LED4 blinks as ~1 Hz heartbeat
+     */
     uint32_t counter = 0;
     while (1) {
-        usb_dev_poll();
+        usb_host_poll();
+        sdcard_poll();
         if (++counter >= 200000) {
             counter = 0;
             GPIOE_ODR ^= LED4;
