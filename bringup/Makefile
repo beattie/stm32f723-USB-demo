@@ -27,5 +27,21 @@ flash: $(TARGET).elf
 	probe-rs download --chip STM32F723VETx --probe 1fc9:0090 $(TARGET).elf
 	probe-rs reset --chip STM32F723VETx --probe 1fc9:0090
 
+# ---- Connectivity test (standalone, own main) ----
+TEST_TARGET = conn_test
+TEST_SRCS   = conn_test.c startup.c
+TEST_OBJS   = $(TEST_SRCS:.c=.o)
+
+$(TEST_TARGET).elf: conn_test.o startup.o
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
+
+$(TEST_TARGET).bin: $(TEST_TARGET).elf
+	$(OBJCOPY) -O binary $< $@
+
+flash_test: $(TEST_TARGET).elf $(TEST_TARGET).bin
+	probe-rs download --chip STM32F723VETx --probe 1fc9:0090 $(TEST_TARGET).elf
+	probe-rs reset --chip STM32F723VETx --probe 1fc9:0090
+
 clean:
-	rm -f $(OBJS) $(TARGET).elf $(TARGET).bin
+	rm -f $(OBJS) $(TARGET).elf $(TARGET).bin \
+	      conn_test.o $(TEST_TARGET).elf $(TEST_TARGET).bin
