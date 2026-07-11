@@ -56,6 +56,8 @@ Pictures/   board photos
 | LCD_DC   | ?    | Display D/C |
 | LCD_BL   | ?    | Display backlight |
 | LCD_RST  | pin 69 | Disconnected — not needed |
+| UART2_TX | PA2    | USART2 TX (AF7) — v0.2 |
+| UART2_RX | PA3    | USART2 RX (AF7) — v0.2 |
 
 ## Board v0.1 Known Issues
 
