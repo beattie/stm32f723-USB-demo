@@ -12,7 +12,7 @@ Custom board bring-up and USB password manager demo in C.
 
 - Compiler: arm-none-eabi-gcc
 - Flash: probe-rs
-- No external crystal — use HSI16 + PLL for SYSCLK, HSI48 + CRS for USB
+- No external crystal — use HSI16 + PLL for SYSCLK; PLLQ=48MHz for USB (CLK48SEL on F72x only routes PLLQ)
 
 ## Flash Commands
 
@@ -65,7 +65,16 @@ Pictures/   board photos
 - VDDA bypass caps were in series (schematic bug) — workaround applied
 - VDDPHYHS caps same series bug — apply same fix when installing FB2/C23/C24
 - Pin 69 (LCD_RST / PA10) disconnected — not a problem for LCD, but PA10 is OTG_FS_ID; floating ID pin keeps OTG core in B-device/device mode. **v0.1 bodge: wire PA10 to GND. v0.2 fix: add 10kΩ pull-down on PA10.**
+- PB13 (pin 52, OTG_HS_VBUS) is NC — VBUS comparator has no input, D+ pull-up never activates, USB-C device invisible to host. **v0.2 fix: connect PB13 to VBUS_DATA net (post-fuse VBUS from J8).**
 - No UART on board — use SWO/ITM via J7 for debug output
+
+## Schematic v0.2 Change List
+
+1. **PA10 pull-down**: add 10kΩ from PA10 (pin 69) to GND — fixes OTG_FS_ID float, enables USB-A host mode without FHMOD hack
+2. **PB13 to VBUS_DATA**: connect PB13 (pin 52) to VBUS_DATA net (J8 VBUS post-fuse) — enables OTG_HS VBUS comparator for USB-C device detection
+3. **LED resistor footprints**: change from R_0201_0603Metric to R_0603 (imperial) for R19/R22/R23/R24 and all other LED current limiters
+4. **VDDA/VDDPHYHS cap topology**: fix bypass caps from series to parallel (schematic matches the hardware bodge already applied)
+5. **UART2**: add PA2 (TX) / PA3 (RX) breakout for USART2 debug
 
 ## Bring-Up Status
 

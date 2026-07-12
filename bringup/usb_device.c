@@ -25,6 +25,7 @@
 #define RCC_CR          (*(volatile uint32_t *)(RCC_BASE + 0x00))
 #define RCC_PLLCFGR     (*(volatile uint32_t *)(RCC_BASE + 0x04))
 #define RCC_AHB1ENR     (*(volatile uint32_t *)(RCC_BASE + 0x30))
+#define RCC_AHB1RSTR    (*(volatile uint32_t *)(RCC_BASE + 0x10))
 
 /* ================================================================
  * GPIOB — PB14 = OTG_HS_DM, PB15 = OTG_HS_DP (AF12)
@@ -32,6 +33,7 @@
 #define GPIOB_BASE      0x40020400UL
 #define GPIOB_MODER     (*(volatile uint32_t *)(GPIOB_BASE + 0x00))
 #define GPIOB_OSPEEDR   (*(volatile uint32_t *)(GPIOB_BASE + 0x08))
+#define GPIOB_BSRR      (*(volatile uint32_t *)(GPIOB_BASE + 0x18))
 #define GPIOB_AFRH      (*(volatile uint32_t *)(GPIOB_BASE + 0x24))
 
 /* ================================================================
@@ -95,41 +97,51 @@ void usb_device_init(void)
     /* 1. Enable GPIOB clock ------------------------------------------- */
     RCC_AHB1ENR |= (1u << 1);   /* GPIOBEN */
 
-    /* 2. PB14/PB15 as OTG_HS_DM/DP, AF12, very high speed ------------ */
+    /* 2. PB13 HIGH — simulates VBUS present to the OTG_HS VBUS comparator.
+     *    PB13 is NC on this board; driving it from GPIO fools the analog
+     *    comparator so the PHY enables its clock and the D+ pull-up path. */
+    GPIOB_MODER = (GPIOB_MODER & ~(3u<<26)) | (1u<<26);  /* PB13 output */
+    GPIOB_BSRR  = (1u << 13);                              /* PB13 = HIGH */
+
+    /* PB14/PB15 as OTG_HS_DM/DP, AF12, very high speed ------------ */
     /* MODER: PB14[29:28]=10, PB15[31:30]=10 */
     GPIOB_MODER   = (GPIOB_MODER   & ~((3u<<28)|(3u<<30))) | ((2u<<28)|(2u<<30));
     GPIOB_OSPEEDR |= (3u<<28)|(3u<<30);
     /* AFRH: AF12=0xC at PB14[27:24] and PB15[31:28] */
     GPIOB_AFRH    = (GPIOB_AFRH    & ~((0xFu<<24)|(0xFu<<28))) | ((0xCu<<24)|(0xCu<<28));
 
-    /* 3. Enable OTG_HS AHB interface clock.
-     * Bit 29 = OTGHSEN.  Do NOT enable OTGHSULPIEN (bit 30): that is the
-     * ULPI interface clock for an external HS PHY and must be left off when
-     * using the internal FS transceiver (PHYSEL=1). Enabling it without a
-     * real ULPI PHY stalls the OTG_HS core waiting for a ULPI handshake. */
-    RCC_AHB1ENR |= (1u << 29);
+    /* 3. RCC peripheral reset then enable OTG_HS clock.
+     * Bit 29 = OTGHSEN/OTGHSRST.  Do NOT enable OTGHSULPIEN (bit 30):
+     * that is the ULPI clock for an external HS PHY — enabling it without
+     * a real ULPI PHY stalls the core waiting for a ULPI handshake. */
+    RCC_AHB1RSTR |=  (1u << 29);   /* assert OTG_HS reset */
+    udelay(1000);
+    RCC_AHB1RSTR &= ~(1u << 29);   /* release reset */
+    RCC_AHB1ENR  |=  (1u << 29);   /* enable OTG_HS clock */
     udelay(1000);
 
-    /* 4. Soft-disconnect while initialising --------------------------- */
-    HS_DCTL |= (1u << 1);   /* SDIS=1 */
-
-    /* 5. Power up PHY, force device mode.
-     * FDMOD (bit 30): force device mode — belt-and-suspenders since
-     * the floating ID pin already gives CIDSTS=1 (B-device).
-     * PHYSEL (bit 6): internal FS serial transceiver.
-     * TRDT[13:10] = 13 (0xD): correct for 16 MHz AHB (HSI16, no PLL). */
-    /* 5. Full-assign GUSBCFG to avoid stale bits from reset state.
+    /* 4. GUSBCFG and GCCFG must be set BEFORE CSRST so the core comes
+     * out of soft-reset already knowing the PHY type and mode.
      * FDMOD (bit 30): force device mode.
-     * PHYSEL (bit 6): internal FS serial transceiver (uses CLK48 = HSI48).
-     * TRDT[13:10] = 13: for 16 MHz AHB (HSI16, no PLL). */
+     * PHYSEL (bit 6): internal FS serial transceiver (PLLQ = 48 MHz).
+     * TRDT[13:10] = 13: adequate for 16 MHz AHB. */
     HS_GUSBCFG  = (1u << 30)    /* FDMOD */
                 | (1u << 6)     /* PHYSEL */
                 | (13u << 10);  /* TRDT=13 */
-    HS_GCCFG    = (1u << 16);   /* PWRDWN=1, VBDEN=0 */
-    HS_PCGCCTL  = 0;
+    /* PWRDWN=1: power up internal FS PHY.
+     * VBDEN=1: enable VBUS detection on PB13 — PB13 is driven HIGH by GPIO
+     * above to simulate VBUS present, which the PHY needs to clock up. */
+    HS_GCCFG    = (1u << 16) | (1u << 21);
+    HS_PCGCCTL  = 0;             /* ungate clocks */
+    udelay(50000);               /* ≥3 ms for PHY to stabilise */
 
-    /* Force B-session valid — enables D+ pull-up without VBUS pin sensing */
-    HS_GOTGCTL |= (1u << 6) | (1u << 7);  /* BVBOAEN + BVALOVAL */
+    /* 5. Soft-disconnect while finishing configuration ---------------- */
+    HS_DCTL |= (1u << 1);   /* SDIS=1 */
+
+    /* Force session valid — enables D+ pull-up without VBUS pin sensing.
+     * VBVALOEN/VBVALOVAL (bits 2,3): tell the analog PHY that VBUS is valid.
+     * BVALOEN/BVALOVAL   (bits 6,7): tell the digital OTG SM session is valid. */
+    HS_GOTGCTL |= (1u<<2)|(1u<<3)|(1u<<6)|(1u<<7);
 
     udelay(320000);  /* 20 ms */
 

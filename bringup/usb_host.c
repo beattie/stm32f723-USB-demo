@@ -5,8 +5,10 @@
  * PA11 = OTG_FS_DM, PA12 = OTG_FS_DP (AF10).
  * VBUS is hardwired from USB-C 5V input — no GPIO switch needed.
  *
- * Clock: HSI48 + CRS (48 MHz USB clock, no external crystal).
- * CLK48SEL[27:26] = 11 in RCC_DCKCFGR2 (offset 0x90).
+ * Clock: PLL48CLK (PLLQ = 48 MHz) as CLK48 source.
+ * On STM32F72x only bit 27 of RCC_DCKCFGR2 is writable, so
+ * CLK48SEL[27:26] = 10 (PLLQ) is what actually gets selected.
+ * HSI48 is not accessible via the CLK48SEL mux on this device.
  *
  * Bring-up goal: usb_host_connected() returns 1 when anything plugs
  * into the USB-A port.  LED2 (PE0) reflects connect status.
@@ -20,18 +22,12 @@
  * ================================================================ */
 #define RCC_BASE        0x40023800UL
 #define RCC_CR          (*(volatile uint32_t *)(RCC_BASE + 0x00))
+#define RCC_PLLCFGR     (*(volatile uint32_t *)(RCC_BASE + 0x04))
 #define RCC_AHB1ENR     (*(volatile uint32_t *)(RCC_BASE + 0x30))
 #define RCC_AHB2ENR     (*(volatile uint32_t *)(RCC_BASE + 0x34))
-#define RCC_APB1ENR     (*(volatile uint32_t *)(RCC_BASE + 0x40))
+#define RCC_AHB2RSTR    (*(volatile uint32_t *)(RCC_BASE + 0x14))
 /* DCKCFGR2 offset 0x90 confirmed correct on STM32F72x by hardware probing */
 #define RCC_DCKCFGR2    (*(volatile uint32_t *)(RCC_BASE + 0x90))
-
-/* ================================================================
- * CRS (APB1 @ 0x40006C00) — trim HSI48 to USB SOF
- * ================================================================ */
-#define CRS_BASE        0x40006C00UL
-#define CRS_CR          (*(volatile uint32_t *)(CRS_BASE + 0x00))
-#define CRS_CFGR        (*(volatile uint32_t *)(CRS_BASE + 0x04))
 
 /* ================================================================
  * GPIOA — PA11 = OTG_FS_DM, PA12 = OTG_FS_DP (AF10)
@@ -102,21 +98,21 @@ static void udelay(volatile uint32_t n) { while (n--) __asm__("nop"); }
  * ================================================================ */
 void usb_host_init(void)
 {
-    /* 1. HSI48 + CRS ---------------------------------------------------- */
-    RCC_CR |= (1u << 26);               /* HSI48ON */
-    while (!(RCC_CR & (1u << 27))) {}   /* wait HSI48RDY */
-
-    /* CLK48SEL[27:26] = 11 → select HSI48 as 48 MHz source */
-    RCC_DCKCFGR2 = (RCC_DCKCFGR2 & ~(3u << 26)) | (3u << 26);
-
-    RCC_APB1ENR |= (1u << 27);          /* CRSEN */
-
-    /* CRS: trim HSI48 to USB SOF (1 kHz)
-     *   RELOAD = 0xBB7F = 48 000 000/1000 - 1
-     *   FELIM  = 22     (≈ 1% tolerance)
-     *   SYNCSRC[29:28] = 10 → USB SOF */
-    CRS_CFGR = 0xBB7Fu | (22u << 16) | (2u << 28);
-    CRS_CR  |= (1u << 6) | (1u << 5);  /* AUTOTRIMEN | CEN */
+    /* 1. Start PLL so PLLQ = 48 MHz — required for CLK48 on STM32F72x.
+     *    On F72x, CLK48SEL in DCKCFGR2 only has bit 27 writable, giving
+     *    CLK48SEL=10 (PLLQ).  SYSCLK stays on HSI16; we only need PLLQ.
+     *    PLLM=8, PLLN=96, PLLQ=4 → VCO=192 MHz, PLLQ=48 MHz. */
+    if (!(RCC_CR & (1u << 25))) {       /* skip if PLLRDY already set */
+        RCC_PLLCFGR = (4u  << 24)       /* PLLQ=4  → 48 MHz          */
+                    | (0u  << 22)        /* PLLSRC=HSI16               */
+                    | (1u  << 16)        /* PLLP=÷4 (unused)           */
+                    | (96u <<  6)        /* PLLN=96 → VCO=192 MHz      */
+                    |  8u;               /* PLLM=8  → VCO_in=2 MHz     */
+        RCC_CR |= (1u << 24);           /* PLLON */
+        while (!(RCC_CR & (1u << 25))) {} /* wait PLLRDY */
+    }
+    /* CLK48SEL: write both bits; only bit 27 sticks on F72x → PLLQ selected */
+    RCC_DCKCFGR2 = (RCC_DCKCFGR2 & ~(3u << 26)) | (1u << 27);
 
     /* 2. GPIO ------------------------------------------------------------ */
     RCC_AHB1ENR |= (1u << 0);          /* GPIOAEN */
@@ -136,34 +132,33 @@ void usb_host_init(void)
     /* AFRH: AF10=0xA at PA11[15:12] and PA12[19:16] */
     GPIOA_AFRH    = (GPIOA_AFRH    & ~((0xFu<<12)|(0xFu<<16))) | ((0xAu<<12)|(0xAu<<16));
 
-    /* 3. Enable OTG_FS clock (AHB2ENR bit 7) ----------------------------- */
-    RCC_AHB2ENR |= (1u << 7);
+    /* 3. Reset then enable OTG_FS peripheral so it comes up clean.
+     * The OTG core latches CIDSTS (ID pin) the moment it first powers up.
+     * We must have FHMOD set and PA10 grounded BEFORE the core samples the
+     * ID pin, which means asserting FHMOD immediately after clock enable —
+     * before GCCFG.PWRDWN is touched. */
+    RCC_AHB2RSTR |=  (1u << 7);   /* assert OTG_FS reset */
     udelay(1000);
+    RCC_AHB2RSTR &= ~(1u << 7);   /* release reset */
+    RCC_AHB2ENR  |=  (1u << 7);   /* enable OTG_FS clock */
 
-    /* 4. Power up PHY before reset — CSRST needs the 48MHz PHY clock,
-     * which is only running when GCCFG.PWRDWN=1.                        */
-    /* 4. Force host mode BEFORE powering up the PHY.
-     * Per Synopsys programming guide: set FHMOD before GCCFG.PWRDWN so the
-     * core comes up in host mode without passing through device mode first.
-     * PA10 (OTG_FS_ID) is unusable on this board; we always want host mode. */
-    GUSBCFG = (GUSBCFG & ~(1u << 30))  /* clear FDMOD */
-            | (1u << 29)                 /* FHMOD: force host mode */
-            | (1u << 6);                 /* PHYSEL: internal FS transceiver */
+    /* 4. Set FHMOD (force host mode) IMMEDIATELY — before GCCFG.PWRDWN
+     * powers the transceiver and the PHY samples the ID pin. */
+    GUSBCFG = (1u << 29)   /* FHMOD: force host mode */
+            | (1u << 6);    /* PHYSEL: internal FS transceiver */
 
-    /* Override OTG session detection so the state machine commits to
-     * A-device/host regardless of the floating ID pin:
-     *   VBVALIDOVEN (bit 2) + VBVALIDOVVAL (bit 3) = VBUS always valid
-     *   AVAOAEN (bit 5) + AVALOV (bit 4) = A-session always valid       */
+    /* A-device/VBUS valid overrides — belt-and-suspenders in case the
+     * OTG state machine still checks session validity. */
     GOTGCTL |= (1u<<2)|(1u<<3)|(1u<<4)|(1u<<5);
 
     /* 5. Power up PHY and ungate clocks ---------------------------------- */
     GCCFG   = (1u << 16);  /* PWRDWN=1: enable transceiver */
-    PCGCCTL = 0;            /* ensure clocks not gated */
-    udelay(800000);         /* ~50 ms — mode switch + PHY stabilise */
+    PCGCCTL = 0;
 
-    /* 6. Wait for mode switch — 50 ms per Synopsys spec.
-     * We do NOT check CMOD: when PA10 (OTG_FS_ID) is floating the bit is
-     * unreliable; FHMOD is sufficient for fixed-host operation. */
+    /* 6. Wait ≥25 ms for mode switch (Synopsys spec).
+     * Skip CSRST — it requires the 48 MHz PHY clock which is not present
+     * on OTG_FS; CSRST hangs and locks the entire core. FHMOD alone is
+     * sufficient to switch modes after the RCC reset above. */
     uint32_t timeout;
     udelay(800000);   /* ~50 ms */
 
