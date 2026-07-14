@@ -1,14 +1,21 @@
 /*
- * usb_device.c — USB-C device bring-up on STM32F723
+ * usb_device.c — USB-C device bring-up on STM32F723 using OTGPHYC
  *
- * Uses OTG_HS peripheral in full-speed device mode (base 0x40040000).
- * PB14 = OTG_HS_DM, PB15 = OTG_HS_DP (AF12).
+ * Uses OTG_HS peripheral with the on-chip OTGPHYC embedded HS PHY.
+ * PB14 (USB_HS_DM) and PB15 (USB_HS_DP) are driven as dedicated analog
+ * pads by OTGPHYC — no GPIO AF configuration required.
  *
- * Clock: HSI48 as CLK48 source (set up by usb_host_init / sdcard_init).
+ * Clock: OTGPHYC PLL uses HSI16 (16 MHz) directly as reference (PLLsel=3).
+ * No PLLQ dependency; PLLQ only needed by usb_host.c for OTG_FS.
  *
  * Bring-up goal: detect USB bus reset from the host PC (GINTSTS.USBRST),
- * confirming the D+/D- lines are connected through the USB-C data connector.
+ * confirming the D+/D- lines are live through the USB-C connector.
  * LED3 (PE1) lights on first bus reset received.
+ *
+ * Why OTGPHYC instead of PHYSEL=1 (internal FS serial transceiver):
+ *   PHYSEL=1 path ties D+ pull-up to the VBUS comparator (BSVLD). With PB13
+ *   NC on v0.1, BSVLD stays 0 and the pull-up never activates regardless of
+ *   software overrides. OTGPHYC bypasses the VBUS comparator entirely.
  */
 
 #include <stdint.h>
@@ -16,25 +23,12 @@
 
 /* ================================================================
  * RCC
- * OTG_HS internal FS transceiver uses PLL48CLK (PLLQ), NOT the
- * CLK48SEL mux (which feeds only OTG_FS / SDMMC / RNG).
- * We run SYSCLK on HSI16 but spin up PLL just to produce PLLQ=48 MHz.
- *   HSI16 → /PLLM=8 → 2 MHz → ×PLLN=96 → 192 MHz VCO → /PLLQ=4 → 48 MHz
  * ================================================================ */
 #define RCC_BASE        0x40023800UL
-#define RCC_CR          (*(volatile uint32_t *)(RCC_BASE + 0x00))
-#define RCC_PLLCFGR     (*(volatile uint32_t *)(RCC_BASE + 0x04))
-#define RCC_AHB1ENR     (*(volatile uint32_t *)(RCC_BASE + 0x30))
 #define RCC_AHB1RSTR    (*(volatile uint32_t *)(RCC_BASE + 0x10))
-
-/* ================================================================
- * GPIOB — PB14 = OTG_HS_DM, PB15 = OTG_HS_DP (AF12)
- * ================================================================ */
-#define GPIOB_BASE      0x40020400UL
-#define GPIOB_MODER     (*(volatile uint32_t *)(GPIOB_BASE + 0x00))
-#define GPIOB_OSPEEDR   (*(volatile uint32_t *)(GPIOB_BASE + 0x08))
-#define GPIOB_BSRR      (*(volatile uint32_t *)(GPIOB_BASE + 0x18))
-#define GPIOB_AFRH      (*(volatile uint32_t *)(GPIOB_BASE + 0x24))
+#define RCC_AHB1ENR     (*(volatile uint32_t *)(RCC_BASE + 0x30))
+#define RCC_APB2RSTR    (*(volatile uint32_t *)(RCC_BASE + 0x24))
+#define RCC_APB2ENR     (*(volatile uint32_t *)(RCC_BASE + 0x44))
 
 /* ================================================================
  * GPIOE — LED3 (PE1, GREEN)
@@ -43,11 +37,33 @@
 #define LED3            (1u << 1)
 
 /* ================================================================
+ * OTGPHYC — on-chip embedded HS PHY (base 0x40017C00)
+ *
+ * PLL  (offset 0x000):
+ *   bit  0   = PLLEN (enable PLL)
+ *   bits[3:1]= PLLsel:
+ *              0x0 = 12 MHz, 0x2 = 12.5 MHz, 0x6 = 16 MHz,
+ *              0x8 = 24 MHz, 0xC = 25 MHz
+ * TUNE (offset 0x00C): PHY tuning; set to 0x00000F13
+ * LDO  (offset 0x018):
+ *   bit  1   = LDO_STATUS  (read: 1 = LDO ready)
+ *   bit  2   = LDO_ENABLE  (write 1 to enable)
+ * ================================================================ */
+#define PHYC_BASE       0x40017C00UL
+#define PHYC_PLL        (*(volatile uint32_t *)(PHYC_BASE + 0x000))
+#define PHYC_TUNE       (*(volatile uint32_t *)(PHYC_BASE + 0x00C))
+#define PHYC_LDO        (*(volatile uint32_t *)(PHYC_BASE + 0x018))
+
+#define PHYC_PLLEN          (1u << 0)
+#define PHYC_PLLSEL_16MHZ   (0x6u)   /* bits[3:1]=011 i.e. (0x3 << 1) */
+#define PHYC_LDO_STATUS     (1u << 1)
+#define PHYC_LDO_ENABLE     (1u << 2)
+#define PHYC_TUNE_VALUE     0x00000F13U
+
+/* ================================================================
  * OTG_HS core global registers (base 0x40040000)
  * ================================================================ */
 #define OTG_HS_BASE     0x40040000UL
-
-#define HS_GOTGCTL      (*(volatile uint32_t *)(OTG_HS_BASE + 0x000))
 #define HS_GAHBCFG      (*(volatile uint32_t *)(OTG_HS_BASE + 0x008))
 #define HS_GUSBCFG      (*(volatile uint32_t *)(OTG_HS_BASE + 0x00C))
 #define HS_GRSTCTL      (*(volatile uint32_t *)(OTG_HS_BASE + 0x010))
@@ -58,21 +74,15 @@
 #define HS_GCCFG        (*(volatile uint32_t *)(OTG_HS_BASE + 0x038))
 #define HS_PCGCCTL      (*(volatile uint32_t *)(OTG_HS_BASE + 0xE00))
 
-/* ================================================================
- * OTG_HS device-mode registers
- * ================================================================ */
+/* OTG_HS device-mode registers */
 #define HS_DCFG         (*(volatile uint32_t *)(OTG_HS_BASE + 0x800))
 #define HS_DCTL         (*(volatile uint32_t *)(OTG_HS_BASE + 0x804))
-#define HS_DSTS         (*(volatile uint32_t *)(OTG_HS_BASE + 0x808))
 
 /* ================================================================
  * Module state
  * ================================================================ */
 static volatile int g_connected = 0;
 
-/* ================================================================
- * Helpers
- * ================================================================ */
 static void udelay(volatile uint32_t n) { while (n--) __asm__("nop"); }
 
 /* ================================================================
@@ -80,87 +90,83 @@ static void udelay(volatile uint32_t n) { while (n--) __asm__("nop"); }
  * ================================================================ */
 void usb_device_init(void)
 {
-    /* 0. Start PLL so PLLQ = 48 MHz (required by OTG_HS internal FS PHY).
-     *    PLL must be off to write PLLCFGR; at reset it is off.
-     *    PLLM=8, PLLN=96, PLLP=÷4 (unused), PLLSRC=HSI16, PLLQ=4.
-     *    SYSCLK stays on HSI16 — we only need PLLQ. */
-    if (!(RCC_CR & (1u << 25))) {   /* if PLLRDY=0, PLL not yet running */
-        RCC_PLLCFGR = (4u  << 24)  /* PLLQ=4  → 192/4 = 48 MHz        */
-                    | (0u  << 22)  /* PLLSRC=HSI16                     */
-                    | (1u  << 16)  /* PLLP=01 → ÷4 (not used for SYSCLK)*/
-                    | (96u <<  6)  /* PLLN=96 → VCO=192 MHz            */
-                    |  8u;         /* PLLM=8  → VCO_in=2 MHz           */
-        RCC_CR |= (1u << 24);      /* PLLON */
-        while (!(RCC_CR & (1u << 25))) {}  /* wait PLLRDY */
-    }
+    uint32_t timeout;
 
-    /* 1. Enable GPIOB clock ------------------------------------------- */
-    RCC_AHB1ENR |= (1u << 1);   /* GPIOBEN */
-
-    /* 2. PB13 HIGH — simulates VBUS present to the OTG_HS VBUS comparator.
-     *    PB13 is NC on this board; driving it from GPIO fools the analog
-     *    comparator so the PHY enables its clock and the D+ pull-up path. */
-    GPIOB_MODER = (GPIOB_MODER & ~(3u<<26)) | (1u<<26);  /* PB13 output */
-    GPIOB_BSRR  = (1u << 13);                              /* PB13 = HIGH */
-
-    /* PB14/PB15 as OTG_HS_DM/DP, AF12, very high speed ------------ */
-    /* MODER: PB14[29:28]=10, PB15[31:30]=10 */
-    GPIOB_MODER   = (GPIOB_MODER   & ~((3u<<28)|(3u<<30))) | ((2u<<28)|(2u<<30));
-    GPIOB_OSPEEDR |= (3u<<28)|(3u<<30);
-    /* AFRH: AF12=0xC at PB14[27:24] and PB15[31:28] */
-    GPIOB_AFRH    = (GPIOB_AFRH    & ~((0xFu<<24)|(0xFu<<28))) | ((0xCu<<24)|(0xCu<<28));
-
-    /* 3. RCC peripheral reset then enable OTG_HS clock.
-     * Bit 29 = OTGHSEN/OTGHSRST.  Do NOT enable OTGHSULPIEN (bit 30):
-     * that is the ULPI clock for an external HS PHY — enabling it without
-     * a real ULPI PHY stalls the core waiting for a ULPI handshake. */
-    RCC_AHB1RSTR |=  (1u << 29);   /* assert OTG_HS reset */
-    udelay(1000);
-    RCC_AHB1RSTR &= ~(1u << 29);   /* release reset */
-    RCC_AHB1ENR  |=  (1u << 29);   /* enable OTG_HS clock */
+    /* 1. Enable peripheral clocks:
+     *   APB2ENR bit 31 = OTGPHYCEN  — OTGPHYC peripheral
+     *   AHB1ENR bit 29 = OTGHSEN    — OTG_HS core
+     *   AHB1ENR bit 30 = OTGHSULPIEN — required for embedded PHY path */
+    RCC_APB2ENR |= (1u << 31);
+    RCC_AHB1ENR |= (1u << 29) | (1u << 30);
     udelay(1000);
 
-    /* 4. GUSBCFG and GCCFG must be set BEFORE CSRST so the core comes
-     * out of soft-reset already knowing the PHY type and mode.
-     * FDMOD (bit 30): force device mode.
-     * PHYSEL (bit 6): internal FS serial transceiver (PLLQ = 48 MHz).
-     * TRDT[13:10] = 13: adequate for 16 MHz AHB. */
-    HS_GUSBCFG  = (1u << 30)    /* FDMOD */
-                | (1u << 6)     /* PHYSEL */
-                | (13u << 10);  /* TRDT=13 */
-    /* PWRDWN=1: power up internal FS PHY.
-     * VBDEN=1: enable VBUS detection on PB13 — PB13 is driven HIGH by GPIO
-     * above to simulate VBUS present, which the PHY needs to clock up. */
-    HS_GCCFG    = (1u << 16) | (1u << 21);
-    HS_PCGCCTL  = 0;             /* ungate clocks */
-    udelay(50000);               /* ≥3 ms for PHY to stabilise */
+    /* 2. Reset and release OTG_HS core */
+    RCC_AHB1RSTR |=  (1u << 29);
+    udelay(100);
+    RCC_AHB1RSTR &= ~(1u << 29);
+    udelay(1000);
 
-    /* 5. Soft-disconnect while finishing configuration ---------------- */
+    /* 3. Select embedded UTMI+ PHY in OTG_HS core (before PHYC init):
+     *   Clear PHYSEL (bit 6) — not internal FS serial transceiver
+     *   Clear ULPI_UTMI_SEL (bit 4) — UTMI+ not ULPI
+     *   Clear TSDPS (bit 22), ULPIFSLS (bit 17) — ULPI-related, irrelevant
+     *   Clear ULPIEVBUSD (bit 20), ULPIEVBUSI (bit 21) — VBUS drive via ULPI */
+    HS_GUSBCFG &= ~((1u << 6) | (1u << 4) | (1u << 22) | (1u << 17)
+                  | (1u << 20) | (1u << 21));
+
+    /* 4. GCCFG: disable internal FS transceiver; enable HS PHY path
+     *   Clear PWRDWN (bit 16) — power down internal FS transceiver
+     *   Set   PHYHSEN (bit 23) — enable HS PHY */
+    HS_GCCFG = (HS_GCCFG & ~(1u << 16)) | (1u << 23);
+
+    /* 5. OTGPHYC: enable LDO, wait for it to stabilise */
+    PHYC_LDO |= PHYC_LDO_ENABLE;
+    timeout = 200000;
+    while (!(PHYC_LDO & PHYC_LDO_STATUS) && --timeout) {}
+
+    /* 6. OTGPHYC: set PLL reference = 16 MHz (HSI16), load tuning, start PLL */
+    PHYC_PLL   = PHYC_PLLSEL_16MHZ;    /* PLLsel=3, PLLEN still 0 */
+    PHYC_TUNE |= PHYC_TUNE_VALUE;
+    PHYC_PLL  |= PHYC_PLLEN;           /* enable PLL */
+    udelay(32000);                      /* ≥2 ms for PHY PLL to lock */
+
+    /* 7. Ungate PHY clocks */
+    HS_PCGCCTL = 0;
+
+    /* 8. Force device mode; set turnaround time (TRDT=9 for HS).
+     *   No CSRST: the hardware reset via AHB1RSTR already cleared the core.
+     *   CSRST requires an active PHY clock to complete — if issued too early
+     *   it stalls indefinitely. Skip it. */
+    HS_GUSBCFG = (HS_GUSBCFG
+                  & ~((0xFu << 10) | (1u << 29)))   /* clear TRDT, clear FHMOD */
+               | (1u << 30)                          /* FDMOD: force device mode */
+               | (9u << 10);                         /* TRDT=9 */
+
+    /* Wait for mode switch — RM says up to 25 ms; give 200 ms margin */
+    timeout = 3200000;   /* ~200 ms at HSI16 */
+    while ((HS_GINTSTS & (1u << 0)) && --timeout) {}  /* wait CMOD=0 */
+
+    /* 10. Soft-disconnect while finishing configuration */
     HS_DCTL |= (1u << 1);   /* SDIS=1 */
 
-    /* Force session valid — enables D+ pull-up without VBUS pin sensing.
-     * VBVALOEN/VBVALOVAL (bits 2,3): tell the analog PHY that VBUS is valid.
-     * BVALOEN/BVALOVAL   (bits 6,7): tell the digital OTG SM session is valid. */
-    HS_GOTGCTL |= (1u<<2)|(1u<<3)|(1u<<6)|(1u<<7);
+    /* 11. Device config: high speed, NAK on ZLS out */
+    HS_DCFG = (0u << 0)    /* DSPD=00: high speed */
+            | (1u << 2);   /* NZLSOHSK */
 
-    udelay(320000);  /* 20 ms */
+    /* 12. FIFO sizes (in 32-bit words):
+     *   RX FIFO:  256 words (1024 B) — shared, starts at 0
+     *   EP0 TX:    64 words ( 256 B) — starts at 256            */
+    HS_GRXFSIZ   = 256u;
+    HS_GNPTXFSIZ = (64u << 16) | 256u;
 
-    /* 6. Device config: full-speed internal PHY ----------------------- */
-    HS_DCFG = (3u << 0)   /* DSPD=11: FS internal PHY */
-            | (1u << 2);  /* NZLSOHSK */
-
-    /* 7. FIFO sizes */
-    HS_GRXFSIZ   = 128u;
-    HS_GNPTXFSIZ = (64u << 16) | 128u;
-
-    /* 9. Enable USB reset and enumeration-done interrupts ------------- */
+    /* 13. Enable USB reset and enumeration-done interrupts */
     HS_GINTSTS = 0xFFFFFFFFu;
     HS_GINTMSK = (1u << 12)   /* USBRST  — host issued bus reset */
                | (1u << 13);  /* ENUMDNE — enumeration speed detected */
-    HS_GAHBCFG |= (1u << 0);  /* GINT */
+    HS_GAHBCFG |= (1u << 0);  /* GINT: enable interrupt output */
 
-    /* 10. Connect: release soft-disconnect ---------------------------- */
-    HS_DCTL &= ~(1u << 1);  /* SDIS=0 — enables D+ pull-up */
+    /* 14. Connect: release soft-disconnect, enabling D+ pull-up */
+    HS_DCTL &= ~(1u << 1);  /* SDIS=0 */
 }
 
 /* ================================================================
