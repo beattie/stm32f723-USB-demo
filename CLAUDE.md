@@ -87,6 +87,16 @@ Pictures/   board photos
 - [ ] MicroSD bring-up
 - [ ] Port password manager demo from stm32f746-disc (Rust) to C
 
+## DFU Notes
+
+The STM32F723 built-in ROM bootloader uses OTG_FS (PA11/PA12) for DFU. Since
+PA11/PA12 are wired to the USB-A host connector, the ROM bootloader is not usable
+without a PC connected there.
+
+DFU over USB-C (OTG_HS) requires a firmware implementation — the ROM bootloader
+does not use OTG_HS. A custom DFU class could be triggered by the BOOT button.
+For now, SWD via LPC-LINK2 is the flashing method.
+
 ## Reference Project
 
 Password manager logic implemented in Rust/Embassy at ~/projects/stm32f746-disc.
