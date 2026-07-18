@@ -114,10 +114,10 @@ Ports F/G not bonded out in LQFP100 — only ports A–E available.
 | Port | Free Pins | Notable AFs |
 |------|-----------|-------------|
 | PA | PA0 | TIM2_CH1, TIM5_CH1 |
-| PB | PB0, PB1, PB2, PB7–PB13 | PB0/1: TIM3_CH3/4; PB7–9: TIM4_CH2/3/4 + I2C1; PB10/11: TIM2_CH3/4 + I2C2; PB0/1: CAN1 |
+| PB | PB0, PB1, PB2, PB7–PB13 | PB0/1: TIM3_CH3/4; PB7–9: TIM4_CH2/3/4 + I2C1; PB10/11: TIM2_CH3/4 + I2C2 |
 | PC | PC0–PC7, PC13–PC15 | PC0–5: ADC1_IN10–15; PC6/7: TIM3_CH1/2 + USART6; PC14/15: OSC32 |
 | PD | PD0, PD1, PD3–PD7 | PD0/1: CAN1; PD5/6: USART2 alt pins |
-| PE | PE0–PE2, PE4–PE8, PE10, PE12, PE14–PE15 | PE5/6: TIM9_CH1/2; PE14: TIM1_CH4; PE8/10/12: TIM1 complementary; PE0/1: UART8; PE7/8: UART7 |
+| PE | PE0–PE2, PE4–PE8, PE10, PE12, PE14, PE15 | PE5/6: TIM9_CH1/2; PE14: TIM1_CH4; PE8/10/12: TIM1 complementary; PE0/1: UART8; PE7/8: UART7 |
 
 ## Reference Project
 
