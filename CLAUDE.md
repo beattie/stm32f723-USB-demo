@@ -33,7 +33,7 @@ Pictures/   board photos
 
 | Signal   | Pin  | Net       |
 |----------|------|-----------|
-| LED1     | ?    | Power LED (always on via R9 330Ω) — not GPIO |
+| LED1     | N/A  | Power LED (+5V via R9 330Ω) — not GPIO |
 | LED2     | PE9  | BLUE LED — TIM1_CH1 (AF1), PWM capable |
 | LED3     | PE11 | GREEN LED — TIM1_CH2 (AF1), PWM capable |
 | LED4     | PE13 | YELLOW LED — TIM1_CH3 (AF1), PWM capable |
@@ -46,15 +46,19 @@ Pictures/   board photos
 | USBA-    | PA11 (pin 70) | USB-A host D- — OTG_FS |
 | USBC+    | PB15 (pin 57) | USB-C device D+ — OTG_HS internal FS PHY |
 | USBC-    | PB14 (pin 56) | USB-C device D- — OTG_HS internal FS PHY |
-| SD1_CLK  | ?    | SD card clock |
-| SD1_CMD  | ?    | SD card command |
-| SD1_D0–D3| ?    | SD card data |
-| SPI1_SCK | ?    | Display SCK |
-| SPI1_MOSI| ?    | Display MOSI |
-| SPI1_MISO| ?    | Display MISO |
-| LCD_CS   | ?    | Display CS |
-| LCD_DC   | ?    | Display D/C |
-| LCD_BL   | ?    | Display backlight |
+| SD1_CLK  | PC12 | SD card clock |
+| SD1_CMD  | PD2  | SD card command |
+| SD1_D0   | PC8  | SD card data |
+| SD1_D1   | PC9  | SD card data |
+| SD1_D2   | PC10 | SD card data |
+| SD1_D3   | PC11 | SD card data |
+| SD1_CDET | PE3  | SD card detect |
+| SPI1_SCK | PA5  | Display SCK |
+| SPI1_MOSI| PA7  | Display MOSI |
+| SPI1_MISO| PA6  | Display MISO |
+| LCD_CS   | PA4  | Display CS |
+| LCD_DC   | PA8  | Display D/C |
+| LCD_BL   | PA15 | Display backlight |
 | LCD_RST  | PA1    | Display reset (v0.2) |
 | VERSION_ID | PD11–PD15 | Board version strapping inputs (v0.2; moved from PE11–PE15) |
 | UART2_TX | PA2    | USART2 TX (AF7) — v0.2 |
@@ -79,7 +83,7 @@ Pictures/   board photos
 6. **LED2/3/4 pins**: move from PE0/PE1/PE2 to PE9/PE11/PE13 (TIM1 CH1/2/3 AF1) for PWM brightness control
 7. **LCD_RST**: PA1 (was disconnected pin 69 / PA10)
 8. **Version ID inputs**: move from PE11–PE15 to PD11–PD15 (frees PE9/PE11/PE13 for LEDs)
-9. **SD connector**: switch from microSD to full-size SD (SD-1-A footprint)
+9. **SD connector**: switch from microSD to full-size SD (SD-1-A footprint); both microSD and full-size SD footprints included on PCB as an experiment — only one to be populated
 10. **RGB LED resistor footprints**: 0201 → 0603
 
 ## Bring-Up Status
