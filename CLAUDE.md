@@ -46,9 +46,9 @@ Pictures/   board photos
 | USBA-    | PA11 (pin 70) | USB-A host D- — OTG_FS |
 | USBC+    | PB15 (pin 57) | USB-C device D+ — OTG_HS internal FS PHY |
 | USBC-    | PB14 (pin 56) | USB-C device D- — OTG_HS internal FS PHY |
-| MMC1_CLK | ?    | SD card clock |
-| MMC1_CMD | ?    | SD card command |
-| MMC1_D0-3| ?    | SD card data |
+| SD1_CLK  | ?    | SD card clock |
+| SD1_CMD  | ?    | SD card command |
+| SD1_D0–D3| ?    | SD card data |
 | SPI1_SCK | ?    | Display SCK |
 | SPI1_MOSI| ?    | Display MOSI |
 | SPI1_MISO| ?    | Display MISO |
