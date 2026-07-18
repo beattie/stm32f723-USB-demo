@@ -34,9 +34,9 @@ Pictures/   board photos
 | Signal   | Pin  | Net       |
 |----------|------|-----------|
 | LED1     | ?    | Power LED (always on via R9 330Ω) — not GPIO |
-| LED2     | PE0  | BLUE LED (R19 33Ω bodge needed — metric 0603 footprint) |
-| LED3     | PE1  | GREEN LED |
-| LED4     | PE2  | YELLOW LED |
+| LED2     | PE9  | BLUE LED — TIM1_CH1 (AF1), PWM capable |
+| LED3     | PE11 | GREEN LED — TIM1_CH2 (AF1), PWM capable |
+| LED4     | PE13 | YELLOW LED — TIM1_CH3 (AF1), PWM capable |
 | LED5_R   | PB4  | RGB RED |
 | LED5_G   | PB5  | RGB GREEN |
 | LED5_B   | PB6  | RGB BLUE |
@@ -55,7 +55,8 @@ Pictures/   board photos
 | LCD_CS   | ?    | Display CS |
 | LCD_DC   | ?    | Display D/C |
 | LCD_BL   | ?    | Display backlight |
-| LCD_RST  | pin 69 | Disconnected — not needed |
+| LCD_RST  | PA1    | Display reset (v0.2) |
+| VERSION_ID | PD11–PD15 | Board version strapping inputs (v0.2; moved from PE11–PE15) |
 | UART2_TX | PA2    | USART2 TX (AF7) — v0.2 |
 | UART2_RX | PA3    | USART2 RX (AF7) — v0.2 |
 
@@ -72,9 +73,14 @@ Pictures/   board photos
 
 1. **PA10 pull-down**: add 10kΩ from PA10 (pin 69) to GND — fixes OTG_FS_ID float, enables USB-A host mode without FHMOD hack
 2. **PB13 to VBUS_DATA**: connect PB13 (pin 52) to VBUS_DATA net (J8 VBUS post-fuse) — enables OTG_HS VBUS comparator for USB-C device detection
-3. **LED resistor footprints**: change from R_0201_0603Metric to R_0603 (imperial) for R19/R22/R23/R24 and all other LED current limiters
+3. **LED resistor footprints**: change from R_0201_0603Metric to R_0603 (imperial) for all LED current limiters
 4. **VDDA/VDDPHYHS cap topology**: fix bypass caps from series to parallel (schematic matches the hardware bodge already applied)
-5. **UART2**: add PA2 (TX) / PA3 (RX) breakout for USART2 debug
+5. **UART2**: add PA2 (TX) / PA3 (RX) 3-pin header for USART2 debug and ROM bootloader DFU
+6. **LED2/3/4 pins**: move from PE0/PE1/PE2 to PE9/PE11/PE13 (TIM1 CH1/2/3 AF1) for PWM brightness control
+7. **LCD_RST**: PA1 (was disconnected pin 69 / PA10)
+8. **Version ID inputs**: move from PE11–PE15 to PD11–PD15 (frees PE9/PE11/PE13 for LEDs)
+9. **SD connector**: switch from microSD to full-size SD (SD-1-A footprint)
+10. **RGB LED resistor footprints**: 0201 → 0603
 
 ## Bring-Up Status
 
