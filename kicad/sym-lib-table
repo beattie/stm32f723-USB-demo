@@ -1,0 +1,4 @@
+(sym_lib_table
+  (lib (name "SD-1-A")(type "KiCad")(uri "${KIPRJMOD}/libs/SD-1-A.kicad_sym")(options "")(descr ""))
+  (lib (name "UJ2-AH-4-SMT-TR")(type "KiCad")(uri "${KIPRJMOD}/libs/UJ2-AH-4-SMT-TR.kicad_sym")(options "")(descr ""))
+)
