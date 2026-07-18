@@ -1,0 +1,103 @@
+# STM32F723 USB Passthrough Demo
+
+Custom board bring-up and USB password manager demo in C.
+
+## Board
+
+- SoC: STM32F723VET6, Cortex-M7, LQFP100, 0.5mm pitch, 512KB flash, 256KB SRAM
+- Power: USB-C input → AMS1117 3.3V LDO
+- Debug: SWD via LPC-LINK2 CMSIS-DAP (1fc9:0090) or STLink V2-1 (0483:374b)
+
+## Toolchain
+
+- Compiler: arm-none-eabi-gcc
+- Flash: probe-rs
+- No external crystal — use HSI16 + PLL for SYSCLK; PLLQ=48MHz for USB (CLK48SEL on F72x only routes PLLQ)
+
+## Flash Commands
+
+```bash
+probe-rs download --chip STM32F723VETx --probe 1fc9:0090 bringup/bringup.elf
+probe-rs reset --chip STM32F723VETx --probe 1fc9:0090
+```
+
+## Project Structure
+
+```
+bringup/    bare-metal C bring-up firmware (in progress)
+kicad/      schematic and PCB (USB-pasthrough.kicad_sch)
+Pictures/   board photos
+```
+
+## GPIO Map
+
+| Signal   | Pin  | Net       |
+|----------|------|-----------|
+| LED1     | ?    | Power LED (always on via R9 330Ω) — not GPIO |
+| LED2     | PE0  | BLUE LED (R19 33Ω bodge needed — metric 0603 footprint) |
+| LED3     | PE1  | GREEN LED |
+| LED4     | PE2  | YELLOW LED |
+| LED5_R   | PB4  | RGB RED |
+| LED5_G   | PB5  | RGB GREEN |
+| LED5_B   | PB6  | RGB BLUE |
+| SWDIO    | PA13 | Debug |
+| SWCLK    | PA14 | Debug |
+| USBA+    | PA12 (pin 71) | USB-A host D+ — OTG_FS |
+| USBA-    | PA11 (pin 70) | USB-A host D- — OTG_FS |
+| USBC+    | PB15 (pin 57) | USB-C device D+ — OTG_HS internal FS PHY |
+| USBC-    | PB14 (pin 56) | USB-C device D- — OTG_HS internal FS PHY |
+| MMC1_CLK | ?    | SD card clock |
+| MMC1_CMD | ?    | SD card command |
+| MMC1_D0-3| ?    | SD card data |
+| SPI1_SCK | ?    | Display SCK |
+| SPI1_MOSI| ?    | Display MOSI |
+| SPI1_MISO| ?    | Display MISO |
+| LCD_CS   | ?    | Display CS |
+| LCD_DC   | ?    | Display D/C |
+| LCD_BL   | ?    | Display backlight |
+| LCD_RST  | pin 69 | Disconnected — not needed |
+| UART2_TX | PA2    | USART2 TX (AF7) — v0.2 |
+| UART2_RX | PA3    | USART2 RX (AF7) — v0.2 |
+
+## Board v0.1 Known Issues
+
+- LED current limiter footprints: R_0201_0603Metric where 0603 imperial needed
+- VDDA bypass caps were in series (schematic bug) — workaround applied
+- VDDPHYHS caps same series bug — apply same fix when installing FB2/C23/C24
+- Pin 69 (LCD_RST / PA10) disconnected — not a problem for LCD, but PA10 is OTG_FS_ID; floating ID pin keeps OTG core in B-device/device mode. **v0.1 bodge: wire PA10 to GND. v0.2 fix: add 10kΩ pull-down on PA10.**
+- PB13 (pin 52, OTG_HS_VBUS) is NC — VBUS comparator has no input, D+ pull-up never activates, USB-C device invisible to host. **v0.2 fix: connect PB13 to VBUS_DATA net (post-fuse VBUS from J8).**
+- No UART on board — use SWO/ITM via J7 for debug output
+
+## Schematic v0.2 Change List
+
+1. **PA10 pull-down**: add 10kΩ from PA10 (pin 69) to GND — fixes OTG_FS_ID float, enables USB-A host mode without FHMOD hack
+2. **PB13 to VBUS_DATA**: connect PB13 (pin 52) to VBUS_DATA net (J8 VBUS post-fuse) — enables OTG_HS VBUS comparator for USB-C device detection
+3. **LED resistor footprints**: change from R_0201_0603Metric to R_0603 (imperial) for R19/R22/R23/R24 and all other LED current limiters
+4. **VDDA/VDDPHYHS cap topology**: fix bypass caps from series to parallel (schematic matches the hardware bodge already applied)
+5. **UART2**: add PA2 (TX) / PA3 (RX) breakout for USART2 debug
+
+## Bring-Up Status
+
+- [x] Smoke test — SWD connects, VCAP reads 1.2V, VDD 3.285V, VDDA 3.2V
+- [x] LED chase firmware written and verified (bringup/main.c) — blue LED confirmed blinking 2026-07-10
+- [x] Install FB2 + C23 + C24 (VDDPHYHS filter, parallel cap fix) — done 2026-07-10
+- [x] Bodge R19/R22/R23, install LED2/3/4 — all four LEDs verified 2026-07-10
+- [ ] USB-A host bring-up
+- [ ] USB-C device bring-up
+- [ ] MicroSD bring-up
+- [ ] Port password manager demo from stm32f746-disc (Rust) to C
+
+## DFU Notes
+
+The STM32F723 built-in ROM bootloader uses OTG_FS (PA11/PA12) for DFU. Since
+PA11/PA12 are wired to the USB-A host connector, the ROM bootloader is not usable
+without a PC connected there.
+
+DFU over USB-C (OTG_HS) requires a firmware implementation — the ROM bootloader
+does not use OTG_HS. A custom DFU class could be triggered by the BOOT button.
+For now, SWD via LPC-LINK2 is the flashing method.
+
+## Reference Project
+
+Password manager logic implemented in Rust/Embassy at ~/projects/stm32f746-disc.
+See src/usb_fs_host.rs, src/pm.rs, src/usb_hs.rs for the state machine to port.
