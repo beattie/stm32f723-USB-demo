@@ -110,6 +110,7 @@ For now, SWD via LPC-LINK2 is the flashing method.
 ## PCB Layout Notes (v0.2)
 
 - Avoid placing microSD connector keep-out area beneath power vias
+- SD-1-A footprint may have an error: two pins labeled D0 — verify against datasheet before finalizing layout
 
 ## Free Pins Summary (v0.2)
 
