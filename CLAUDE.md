@@ -110,7 +110,9 @@ For now, SWD via LPC-LINK2 is the flashing method.
 ## PCB Layout Notes (v0.2)
 
 - Avoid placing microSD connector keep-out area beneath power vias
-- SD-1-A footprint may have an error: two pins labeled D0 — verify against datasheet before finalizing layout
+- v0.2: remove PA9 VBUS sensing voltage divider — fixed host mode (FHMOD=1) with VBUS sensing disabled in firmware
+- Activate_SOF (PA8, OTG_FS): outputs 1ms USB Start-Of-Frame pulse on PA8 — not needed for normal operation but useful for bring-up/testing to confirm host is active and frame timing is correct; probe on scope to verify USB host enumeration is running
+- SD-1-A footprint is correct; previous confusion was a schematic wiring error (D1 connected to both D0 and D1) — now fixed
 
 ## Free Pins Summary (v0.2)
 
