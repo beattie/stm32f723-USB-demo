@@ -12,13 +12,16 @@ Custom board bring-up and USB password manager demo in C.
 
 - Compiler: arm-none-eabi-gcc
 - Flash: probe-rs
-- No external crystal — use HSI16 + PLL for SYSCLK; PLLQ=48MHz for USB (CLK48SEL on F72x only routes PLLQ)
+- 8MHz crystal installed on v0.1 (bodged 0603 caps); HSE confirmed 710ppm
+- Clock: PLLM=4, PLLN=192, PLLP=2 → SYSCLK=192MHz; PLLQ=8 → 48MHz for USB
+- CLK48SEL on F72x only routes PLLQ — no PLLSAI option for USB clock
 
 ## Flash Commands
 
 ```bash
-probe-rs download --chip STM32F723VETx --probe 1fc9:0090 bringup/bringup.elf
+probe-rs download --chip STM32F723VETx --probe 1fc9:0090 ~/STM32F723_bringup/build/STM32F723_bringup.elf
 probe-rs reset --chip STM32F723VETx --probe 1fc9:0090
+probe-rs attach --chip STM32F723VETx --probe 1fc9:0090 ~/STM32F723_bringup/build/STM32F723_bringup.elf  # RTT
 ```
 
 ## Project Structure
@@ -92,9 +95,13 @@ Pictures/   board photos
 - [x] LED chase firmware written and verified (bringup/main.c) — blue LED confirmed blinking 2026-07-10
 - [x] Install FB2 + C23 + C24 (VDDPHYHS filter, parallel cap fix) — done 2026-07-10
 - [x] Bodge R19/R22/R23, install LED2/3/4 — all four LEDs verified 2026-07-10
-- [ ] USB-A host bring-up
-- [ ] USB-C device bring-up
-- [ ] MicroSD bring-up
+- [x] USB-A host bring-up — AnnePro2 enumerates as LS HID keyboard, URB_DONE confirmed on keypress 2026-07-20
+  - FHMOD workaround for damaged PA10 (OTG_FS_ID) confirmed working
+  - SET_PROTOCOL STALL handled non-fatally (AnnePro2 quirk)
+  - Keypress ASCII decoding in place; RTT output confirmed
+  - Commit: aac26ba
+- [ ] USB-C device bring-up — OTG_HS PHYSEL=1 FS PHY init confirmed (BSVLD bypass via GOTGCTL); PB13 NC on v0.1 prevents host detection; fix in v0.2
+- [ ] MicroSD bring-up — abandoned on v0.1 (STBITERR, likely broken connector GND); retry on v0.2
 - [ ] Port password manager demo from stm32f746-disc (Rust) to C
 
 ## DFU Notes
