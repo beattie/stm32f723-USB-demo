@@ -5,6 +5,7 @@
 *.kicad_pcb.bak
 *-backups/
 _autosave-*
+\#auto_saved_files#
 
 # FreeRouting files
 *.dsn

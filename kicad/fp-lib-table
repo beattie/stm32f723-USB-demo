@@ -1,3 +1,5 @@
 (fp_lib_table
   (lib (name "Library")(type "KiCad")(uri "${KIPRJMOD}/USB-pasthrough.pretty/Library.pretty")(options "")(descr ""))
+  (lib (name "SD-1-A")(type "KiCad")(uri "${KIPRJMOD}/libs/CUI_SD.pretty")(options "")(descr ""))
+  (lib (name "UJ2-AH-4-SMT-TR")(type "KiCad")(uri "${KIPRJMOD}/libs/SAMESKY_UJ2.pretty")(options "")(descr ""))
 )
