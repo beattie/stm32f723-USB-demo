@@ -47,6 +47,7 @@ Pictures/   board photos
 | SWCLK    | PA14 | Debug |
 | USBA+    | PA12 (pin 71) | USB-A host D+ — OTG_FS |
 | USBA-    | PA11 (pin 70) | USB-A host D- — OTG_FS |
+| USBA_EN  | PB0           | USB-A VBUS enable — TPS2065C active-high EN (v0.2) |
 | USBC+    | PB15 (pin 57) | USB-C device D+ — OTG_HS internal FS PHY |
 | USBC-    | PB14 (pin 56) | USB-C device D- — OTG_HS internal FS PHY |
 | SD1_CLK  | PC12 | SD card clock |
