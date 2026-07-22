@@ -349,7 +349,7 @@ USBD_StatusTypeDef USBD_LL_Init(USBD_HandleTypeDef *pdev)
   hpcd_USB_OTG_HS.Init.Sof_enable = DISABLE;
   hpcd_USB_OTG_HS.Init.low_power_enable = DISABLE;
   hpcd_USB_OTG_HS.Init.lpm_enable = DISABLE;
-  hpcd_USB_OTG_HS.Init.vbus_sensing_enable = DISABLE;
+  hpcd_USB_OTG_HS.Init.vbus_sensing_enable = ENABLE;  /* PB13 bodged to VBUS_DATA on v0.1 */
   hpcd_USB_OTG_HS.Init.use_dedicated_ep1 = DISABLE;
   hpcd_USB_OTG_HS.Init.use_external_vbus = DISABLE;
   if (HAL_PCD_Init(&hpcd_USB_OTG_HS) != HAL_OK)
@@ -358,11 +358,7 @@ USBD_StatusTypeDef USBD_LL_Init(USBD_HandleTypeDef *pdev)
   }
 
 /* USER CODE BEGIN USBD_LL_Init_PostInit */
-  /* PB13 (OTG_HS_VBUS) is NC on v0.1 — bypass VBUS detection and force
-   * B-session valid so the USB core starts a session without VBUS present.
-   * Must be after HAL_PCD_Init (resets GCCFG) but before HAL_PCD_Start (pulls D+ high). */
-  USB_OTG_HS->GCCFG &= ~USB_OTG_GCCFG_VBDEN;
-  USB_OTG_HS->GOTGCTL |= USB_OTG_GOTGCTL_BVALOEN | USB_OTG_GOTGCTL_BVALOVAL;
+  /* PB13 bodged to VBUS_DATA on v0.1 — VBUS sensing enabled above; no bypass needed. */
 /* USER CODE END USBD_LL_Init_PostInit */
 
 #if (USE_HAL_PCD_REGISTER_CALLBACKS == 1U)
