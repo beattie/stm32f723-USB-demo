@@ -77,18 +77,21 @@ Pictures/   board photos
 - PB13 (pin 52, OTG_HS_VBUS) is NC — VBUS comparator has no input, D+ pull-up never activates, USB-C device invisible to host. **v0.2 fix: connect PB13 to VBUS_DATA net (post-fuse VBUS from J8).**
 - No UART on board — use SWO/ITM via J7 for debug output
 
-## Schematic v0.2 Change List
+## Schematic v0.2 Change List — COMPLETE
 
-1. **PA10 pull-down**: add 10kΩ from PA10 (pin 69) to GND — fixes OTG_FS_ID float, enables USB-A host mode without FHMOD hack
-2. **PB13 to VBUS_DATA**: connect PB13 (pin 52) to VBUS_DATA net (J8 VBUS post-fuse) — enables OTG_HS VBUS comparator for USB-C device detection
-3. **LED resistor footprints**: change from R_0201_0603Metric to R_0603 (imperial) for all LED current limiters
-4. **VDDA/VDDPHYHS cap topology**: fix bypass caps from series to parallel (schematic matches the hardware bodge already applied)
-5. **UART2**: add PA2 (TX) / PA3 (RX) 3-pin header for USART2 debug and ROM bootloader DFU
-6. **LED2/3/4 pins**: move from PE0/PE1/PE2 to PE9/PE11/PE13 (TIM1 CH1/2/3 AF1) for PWM brightness control
-7. **LCD_RST**: PA1 (was disconnected pin 69 / PA10)
-8. **Version ID inputs**: move from PE11–PE15 to PD3–PD7 (frees PE9/PE11/PE13 for LEDs)
-9. **SD connector**: switch from microSD to full-size SD (SD-1-A footprint); both microSD and full-size SD footprints included on PCB as an experiment — only one to be populated
-10. **RGB LED resistor footprints**: 0201 → 0603
+1. [x] **PA10 pull-down**: add 10kΩ from PA10 (pin 69) to GND — fixes OTG_FS_ID float, enables USB-A host mode without FHMOD hack
+2. [x] **PB13 to VBUS_DATA**: connect PB13 (pin 52) to VBUS_DATA net (J8 VBUS post-fuse) — enables OTG_HS VBUS comparator for USB-C device detection
+3. [x] **LED resistor footprints**: change from R_0201_0603Metric to R_0603 (imperial) for all LED current limiters
+4. [x] **VDDA/VDDPHYHS cap topology**: fix bypass caps from series to parallel (schematic matches the hardware bodge already applied)
+5. [x] **UART2**: add PA2 (TX) / PA3 (RX) 3-pin header for USART2 debug and ROM bootloader DFU
+6. [x] **LED2/3/4 pins**: move from PE0/PE1/PE2 to PE9/PE11/PE13 (TIM1 CH1/2/3 AF1) for PWM brightness control
+7. [x] **LCD_RST**: PA1 (was disconnected pin 69 / PA10)
+8. [x] **Version ID inputs**: move from PE11–PE15 to PD3–PD7 (frees PE9/PE11/PE13 for LEDs)
+9. [x] **SD connector**: switch from microSD to full-size SD (SD-1-A footprint); both microSD and full-size SD footprints included on PCB as an experiment — only one to be populated
+10. [x] **RGB LED resistor footprints**: 0201 → 0603
+11. [x] **TPS2065C USB-A VBUS switch**: EN on PB0 (active-high), replaces polyfuse — soft-start, overcurrent latch-off, GPIO-controlled power
+12. [x] **LCD_DC**: moved from PA8 to PB1; PA8 broken out as test point (MCO1/OTG_FS_SOF)
+13. [x] **PA9 VBUS divider removed**: fixed host mode with VBUS sensing disabled in firmware
 
 ## Bring-Up Status
 
@@ -101,9 +104,18 @@ Pictures/   board photos
   - SET_PROTOCOL STALL handled non-fatally (AnnePro2 quirk)
   - Keypress ASCII decoding in place; RTT output confirmed
   - Commit: aac26ba
-- [ ] USB-C device bring-up — OTG_HS PHYSEL=1 FS PHY init confirmed (BSVLD bypass via GOTGCTL); PB13 NC on v0.1 prevents host detection; fix in v0.2
-- [ ] MicroSD bring-up — abandoned on v0.1 (STBITERR, likely broken connector GND); retry on v0.2
+- [ ] USB-C device bring-up — OTG_HS FS PHY init confirmed; PB13 NC on v0.1 blocks D+ pull-up; v0.2 fixes with PB13→VBUS_DATA + VBDEN=1 firmware change
+- [ ] MicroSD bring-up — abandoned on v0.1 (STBITERR, broken connector GND); retry on v0.2 with full-size SD connector
 - [ ] Port password manager demo from stm32f746-disc (Rust) to C
+
+## v0.2 Status
+
+- [x] Schematic complete — all 13 changes applied, ERC/DRC clean — 2026-07-21
+- [x] PCB routed — 2026-07-21
+- [ ] Fab / assemble
+- [ ] USB-C device bring-up (PB13 now connected to VBUS_DATA)
+- [ ] MicroSD bring-up (full-size SD connector)
+- [ ] Firmware: enable VBDEN=1 for USB-C device (remove GOTGCTL bypass, use real VBUS comparator)
 
 ## DFU Notes
 
