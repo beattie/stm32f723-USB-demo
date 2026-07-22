@@ -6,8 +6,6 @@
 #include "gpio.h"
 #include "SEGGER_RTT.h"
 #include "usbh_core.h"
-#include "usbh_hid.h"
-#include "usbh_hid_keybd.h"
 
 void SystemClock_Config(void);
 static void MPU_Config(void);
@@ -62,29 +60,27 @@ int main(void)
 
     uint32_t led_tick = 0, led_phase = 0, log_tick = 0;
     uint32_t cnt_done = 0, cnt_notready = 0, cnt_idle = 0, cnt_other = 0;
+    uint8_t itf_dumped = 0;
+    uint16_t cfg_dump_offset = 0;
 
     while (1)
     {
         MX_USB_HOST_Process();
 
-        if (Appli_state == APPLICATION_READY &&
-            hUsbHostFS.pActiveClass != NULL && hUsbHostFS.pActiveClass->pData != NULL)
-        {
-            HID_HandleTypeDef *hid = (HID_HandleTypeDef *)hUsbHostFS.pActiveClass->pData;
-            switch (USBH_LL_GetURBState(&hUsbHostFS, hid->InPipe)) {
-                case USBH_URB_DONE:     cnt_done++;     break;
-                case USBH_URB_NOTREADY: cnt_notready++; break;
-                case USBH_URB_IDLE:     cnt_idle++;     break;
-                default:                cnt_other++;    break;
-            }
-
-            HID_KEYBD_Info_TypeDef *kb = USBH_HID_GetKeybdInfo(&hUsbHostFS);
-            if (kb != NULL && kb->keys[0] != 0) {
-                uint8_t ascii = USBH_HID_GetASCIICode(kb);
-                if (ascii != 0)
-                    SEGGER_RTT_printf(0, "KEY: '%c' (0x%02X)\r\n", ascii, kb->keys[0]);
-                else
-                    SEGGER_RTT_printf(0, "KEY: 0x%02X\r\n", kb->keys[0]);
+        /* Direct keyboard report from HID IN pipe */
+        if (kbd_report_new) {
+            kbd_report_new = 0;
+            uint8_t *d = kbd_report;
+            uint8_t len = kbd_report_len;
+            /* Dump first 8 bytes raw; handles boot-protocol and NKRO with/without report ID */
+            int any = 0;
+            for (uint8_t k = 0; k < len && k < 8; k++) if (d[k]) { any = 1; break; }
+            if (any) {
+                SEGGER_RTT_printf(0, "KBD[%u]: %02X %02X %02X %02X %02X %02X %02X %02X\r\n",
+                    len, d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7]);
+                cnt_done++;
+            } else {
+                cnt_notready++;  /* idle / all-zero report */
             }
         }
 
@@ -101,16 +97,23 @@ int main(void)
         /* USB host status every 2 s */
         if (HAL_GetTick() - log_tick >= 2000) {
             log_tick = HAL_GetTick();
-            if (hUsbHostFS.pActiveClass != NULL && hUsbHostFS.pActiveClass->pData != NULL) {
-                HID_HandleTypeDef *hid = (HID_HandleTypeDef *)hUsbHostFS.pActiveClass->pData;
-                SEGGER_RTT_printf(0, "USBH gState=%d Appli=%d | HID state=%d timer=%lu poll=%u | URB done=%lu notready=%lu idle=%lu other=%lu\r\n",
-                    (int)hUsbHostFS.gState, (int)Appli_state,
-                    (int)hid->state, (unsigned long)hUsbHostFS.Timer, (unsigned)hid->poll,
-                    cnt_done, cnt_notready, cnt_idle, cnt_other);
-            } else {
-                SEGGER_RTT_printf(0, "USBH gState=%d Appli=%d | no class\r\n",
-                    (int)hUsbHostFS.gState, (int)Appli_state);
+            /* Dump raw config descriptor 16 bytes at a time until complete */
+            if (Appli_state == APPLICATION_READY && !itf_dumped) {
+                uint16_t total = hUsbHostFS.device.CfgDesc.wTotalLength;
+                uint8_t *raw = hUsbHostFS.device.CfgDesc_Raw;
+                uint16_t end = cfg_dump_offset + 16;
+                if (end > total) end = total;
+                SEGGER_RTT_printf(0, "CFG[%03u]:", cfg_dump_offset);
+                for (uint16_t j = cfg_dump_offset; j < end; j++)
+                    SEGGER_RTT_printf(0, " %02X", raw[j]);
+                SEGGER_RTT_printf(0, "\r\n");
+                cfg_dump_offset = end;
+                if (cfg_dump_offset >= total)
+                    itf_dumped = 1;
             }
+            SEGGER_RTT_printf(0, "USBH gState=%d Appli=%d mps=%u | kbdrep=%lu idle=%lu\r\n",
+                (int)hUsbHostFS.gState, (int)Appli_state,
+                (unsigned)kbd_report_len, cnt_done, cnt_notready);
             cnt_done = cnt_notready = cnt_idle = cnt_other = 0;
         }
     }

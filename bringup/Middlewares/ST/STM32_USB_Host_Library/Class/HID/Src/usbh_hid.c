@@ -215,6 +215,9 @@ static USBH_StatusTypeDef USBH_HID_InterfaceInit(USBH_HandleTypeDef *phost)
       HID_Handle->InEp = (phost->device.CfgDesc.Itf_Desc[interface].Ep_Desc[num].bEndpointAddress);
       HID_Handle->InPipe = USBH_AllocPipe(phost, HID_Handle->InEp);
       ep_mps = phost->device.CfgDesc.Itf_Desc[interface].Ep_Desc[num].wMaxPacketSize;
+      /* Fix: ep_addr/length init above used Ep_Desc[0] which may be OUT; override with IN values */
+      HID_Handle->ep_addr = HID_Handle->InEp;
+      HID_Handle->length  = ep_mps;
 
       /* Open pipe for IN endpoint */
       (void)USBH_OpenPipe(phost, HID_Handle->InPipe, HID_Handle->InEp, phost->device.address,

@@ -50,7 +50,7 @@ extern "C" {
   * @{
   */
 #ifndef USBH_HID_KEYBD_REPORT_SIZE
-#define USBH_HID_KEYBD_REPORT_SIZE                       0x8U
+#define USBH_HID_KEYBD_REPORT_SIZE                       0x28U  /* 40: fits 37-byte report protocol; 10*40=400 < MAX_DATA_BUFFER */
 #endif /* USBH_HID_KEYBD_REPORT_SIZE */
 
 #define KEY_NONE                               0x00

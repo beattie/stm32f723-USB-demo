@@ -14,6 +14,11 @@ typedef enum {
 extern USBH_HandleTypeDef hUsbHostFS;
 extern ApplicationTypeDef Appli_state;
 
+/* Direct pipe to keyboard IN endpoint */
+extern uint8_t kbd_report[64];  /* latest received report (sized for NKRO) */
+extern uint8_t kbd_report_new;  /* set when new data arrived; caller clears */
+extern uint8_t kbd_report_len;  /* wMaxPacketSize of the opened pipe */
+
 void MX_USB_HOST_Init(void);
 void MX_USB_HOST_Process(void);
 
