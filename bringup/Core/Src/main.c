@@ -7,6 +7,8 @@
 #include "SEGGER_RTT.h"
 #include "usbh_core.h"
 
+extern volatile uint32_t usbd_ev_reset, usbd_ev_setup, usbd_ev_suspend, usbd_ev_setup_b0;
+
 void SystemClock_Config(void);
 static void MPU_Config(void);
 static void test_pin(GPIO_TypeDef *port, uint16_t pin, const char *name);
@@ -22,6 +24,7 @@ int main(void)
     MX_GPIO_Init();       SEGGER_RTT_printf(0, "GPIO ok\r\n");
     MX_SDMMC1_MMC_Init(); SEGGER_RTT_printf(0, "SDMMC ok\r\n");
     MX_SPI1_Init();       SEGGER_RTT_printf(0, "SPI ok\r\n");
+
     MX_USB_DEVICE_Init(); SEGGER_RTT_printf(0, "USB_DEVICE ok\r\n");
     MX_USB_HOST_Init();   SEGGER_RTT_printf(0, "USB_HOST ok\r\n");
 
@@ -31,16 +34,18 @@ int main(void)
     SEGGER_RTT_printf(0, "FS HPRT   =%08lX (PCSTS bit0=port connect)\r\n",
         (unsigned long)*(volatile uint32_t *)(USB_OTG_FS_PERIPH_BASE + USB_OTG_HOST_PORT_BASE));
 
-    /* OTG_HS device register dump — verify FS PHY + VBUS bypass init */
-    SEGGER_RTT_printf(0, "HS GUSBCFG=%08lX (PHYSEL bit6 should=1)\r\n",  (unsigned long)USB_OTG_HS->GUSBCFG);
-    SEGGER_RTT_printf(0, "HS GCCFG  =%08lX (PWRDWN bit16=1, VBDEN bit21=0)\r\n", (unsigned long)USB_OTG_HS->GCCFG);
-    SEGGER_RTT_printf(0, "HS GOTGCTL=%08lX (BVALOEN bit6, BVALOVAL bit7 should=1)\r\n", (unsigned long)USB_OTG_HS->GOTGCTL);
+    /* OTG_HS device register dump — verify FS PHY + VBUS sensing init */
+    SEGGER_RTT_printf(0, "HS GUSBCFG=%08lX (PHYSEL bit6=1, FDMOD bit30=1)\r\n",  (unsigned long)USB_OTG_HS->GUSBCFG);
+    SEGGER_RTT_printf(0, "HS GCCFG  =%08lX (PWRDWN bit16=1, VBDEN bit21=1 needed empirically)\r\n", (unsigned long)USB_OTG_HS->GCCFG);
+    SEGGER_RTT_printf(0, "HS GOTGCTL=%08lX (BVALOEN bit6=1, BVALOVAL bit7=1 needed; BSESVLD bit19=1 means D+ up)\r\n", (unsigned long)USB_OTG_HS->GOTGCTL);
     {
         USB_OTG_DeviceTypeDef *dev = (USB_OTG_DeviceTypeDef *)(USB_OTG_HS_PERIPH_BASE + USB_OTG_DEVICE_BASE);
-        SEGGER_RTT_printf(0, "HS DCTL   =%08lX (SDIS bit1 should=0)\r\n",  (unsigned long)dev->DCTL);
+        SEGGER_RTT_printf(0, "HS DCTL   =%08lX (SDIS bit1=0 means D+ pullup active)\r\n",  (unsigned long)dev->DCTL);
         SEGGER_RTT_printf(0, "HS DCFG   =%08lX (DSPD bits1:0 should=11)\r\n", (unsigned long)dev->DCFG);
     }
-
+    /* GPIO register dump: verify PB14/PB15 are in AF12 (MODER=10, AFR=12) */
+    SEGGER_RTT_printf(0, "PB MODER  =%08lX (bits[31:28] for PB15/14 should=1010)\r\n", (unsigned long)GPIOB->MODER);
+    SEGGER_RTT_printf(0, "PB AFRH   =%08lX (bits[31:24] for PB15/14 should=0xCC=AF12)\r\n", (unsigned long)GPIOB->AFR[1]);
     /* PB4 = TIM3_CH1 AF2: 1 MHz square wave to verify HSE/PLL on scope
      * APB1 = 48 MHz, TIM3 = APB1×2 = 96 MHz; PSC=0 ARR=95 → 1 MHz */
     __HAL_RCC_TIM3_CLK_ENABLE();
@@ -111,9 +116,14 @@ int main(void)
                 if (cfg_dump_offset >= total)
                     itf_dumped = 1;
             }
-            SEGGER_RTT_printf(0, "USBH gState=%d Appli=%d mps=%u | kbdrep=%lu idle=%lu\r\n",
-                (int)hUsbHostFS.gState, (int)Appli_state,
-                (unsigned)kbd_report_len, cnt_done, cnt_notready);
+            {
+                USB_OTG_DeviceTypeDef *dev = (USB_OTG_DeviceTypeDef *)(USB_OTG_HS_PERIPH_BASE + USB_OTG_DEVICE_BASE);
+                SEGGER_RTT_printf(0, "USBH gState=%d Appli=%d mps=%u | kbdrep=%lu idle=%lu | dev rst=%lu setup=%lu(b1=%02lX) susp=%lu | GOTGCTL=%08lX DCTL=%08lX\r\n",
+                    (int)hUsbHostFS.gState, (int)Appli_state,
+                    (unsigned)kbd_report_len, cnt_done, cnt_notready,
+                    usbd_ev_reset, usbd_ev_setup, usbd_ev_setup_b0, usbd_ev_suspend,
+                    (unsigned long)USB_OTG_HS->GOTGCTL, (unsigned long)dev->DCTL);
+            }
             cnt_done = cnt_notready = cnt_idle = cnt_other = 0;
         }
     }

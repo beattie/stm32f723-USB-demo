@@ -34,7 +34,10 @@
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-
+volatile uint32_t usbd_ev_reset   = 0;  /* incremented in ResetCallback */
+volatile uint32_t usbd_ev_setup   = 0;  /* incremented in SetupStageCallback */
+volatile uint32_t usbd_ev_suspend = 0;  /* incremented in SuspendCallback */
+volatile uint32_t usbd_ev_setup_b0 = 0; /* first byte of last SETUP packet */
 /* USER CODE END PV */
 
 PCD_HandleTypeDef hpcd_USB_OTG_HS;
@@ -99,7 +102,7 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef* pcdHandle)
     __HAL_RCC_USB_OTG_HS_CLK_ENABLE();
 
     /* Peripheral interrupt init */
-    HAL_NVIC_SetPriority(OTG_HS_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(OTG_HS_IRQn, 5, 0);  /* <5 allows SWD/DAP to preempt for RTT debug */
     HAL_NVIC_EnableIRQ(OTG_HS_IRQn);
   /* USER CODE BEGIN USB_OTG_HS_MspInit 1 */
 
@@ -145,6 +148,8 @@ static void PCD_SetupStageCallback(PCD_HandleTypeDef *hpcd)
 void HAL_PCD_SetupStageCallback(PCD_HandleTypeDef *hpcd)
 #endif /* USE_HAL_PCD_REGISTER_CALLBACKS */
 {
+  usbd_ev_setup++;
+  usbd_ev_setup_b0 = ((uint8_t*)hpcd->Setup)[1]; /* bRequest */
   USBD_LL_SetupStage((USBD_HandleTypeDef*)hpcd->pData, (uint8_t *)hpcd->Setup);
 }
 
@@ -203,6 +208,7 @@ static void PCD_ResetCallback(PCD_HandleTypeDef *hpcd)
 void HAL_PCD_ResetCallback(PCD_HandleTypeDef *hpcd)
 #endif /* USE_HAL_PCD_REGISTER_CALLBACKS */
 {
+  usbd_ev_reset++;
   USBD_SpeedTypeDef speed = USBD_SPEED_FULL;
 
   if ( hpcd->Init.speed == PCD_SPEED_HIGH)
@@ -236,13 +242,17 @@ static void PCD_SuspendCallback(PCD_HandleTypeDef *hpcd)
 void HAL_PCD_SuspendCallback(PCD_HandleTypeDef *hpcd)
 #endif /* USE_HAL_PCD_REGISTER_CALLBACKS */
 {
+  usbd_ev_suspend++;
   /* Inform USB library that core enters in suspend Mode. */
   USBD_LL_Suspend((USBD_HandleTypeDef*)hpcd->pData);
-  __HAL_PCD_GATE_PHYCLOCK(hpcd);
   /* Enter in STOP mode. */
   /* USER CODE BEGIN 2 */
   if (hpcd->Init.low_power_enable)
   {
+    /* Gate PHY clock and enter low-power sleep only when low_power_enable is set.
+     * Without this guard the clock stays gated permanently (resume doesn't ungate),
+     * killing EP0 response during enumeration. */
+    __HAL_PCD_GATE_PHYCLOCK(hpcd);
     /* Set SLEEPDEEP bit and SleepOnExit of Cortex System Control Register. */
     SCB->SCR |= (uint32_t)((uint32_t)(SCB_SCR_SLEEPDEEP_Msk | SCB_SCR_SLEEPONEXIT_Msk));
   }
@@ -349,7 +359,7 @@ USBD_StatusTypeDef USBD_LL_Init(USBD_HandleTypeDef *pdev)
   hpcd_USB_OTG_HS.Init.Sof_enable = DISABLE;
   hpcd_USB_OTG_HS.Init.low_power_enable = DISABLE;
   hpcd_USB_OTG_HS.Init.lpm_enable = DISABLE;
-  hpcd_USB_OTG_HS.Init.vbus_sensing_enable = ENABLE;  /* PB13 bodged to VBUS_DATA on v0.1 */
+  hpcd_USB_OTG_HS.Init.vbus_sensing_enable = DISABLE;  /* disable HAL VBUS IRQ — prevent mid-enum disconnect on PB13 bodge glitch */
   hpcd_USB_OTG_HS.Init.use_dedicated_ep1 = DISABLE;
   hpcd_USB_OTG_HS.Init.use_external_vbus = DISABLE;
   if (HAL_PCD_Init(&hpcd_USB_OTG_HS) != HAL_OK)
@@ -358,7 +368,15 @@ USBD_StatusTypeDef USBD_LL_Init(USBD_HandleTypeDef *pdev)
   }
 
 /* USER CODE BEGIN USBD_LL_Init_PostInit */
-  /* PB13 bodged to VBUS_DATA on v0.1 — VBUS sensing enabled above; no bypass needed. */
+  /* vbus_sensing_enable=DISABLE makes HAL set VBDEN=0+BVALOEN+BVALOVAL=1.
+   * Despite the RM describing VBDEN as only a comparator enable, empirically
+   * VBDEN=0 leaves TP12 (USB-C D+) at 0V — the internal FS transceiver does
+   * not drive D+ without VBDEN=1. BVALOEN/BVALOVAL alone are insufficient.
+   * Set VBDEN=1 to activate the transceiver. The board has the PB13 bodge
+   * wire (PB13 → VBUS_DATA), so the VBUS comparator sees real VBUS and
+   * BSESVLD=1 whenever the cable is connected. */
+  USB_OTG_HS->GCCFG   |= USB_OTG_GCCFG_VBDEN;
+  USB_OTG_HS->GOTGCTL |= USB_OTG_GOTGCTL_BVALOEN | USB_OTG_GOTGCTL_BVALOVAL;
 /* USER CODE END USBD_LL_Init_PostInit */
 
 #if (USE_HAL_PCD_REGISTER_CALLBACKS == 1U)

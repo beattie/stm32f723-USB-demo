@@ -6180,7 +6180,7 @@
     (property "Reference" "Y1" (id 0) (at 59.69 82.55 90)
       (effects (font (size 1.27 1.27)) (justify right))
     )
-    (property "Value" "8 MHz" (id 1) (at 58.42 85.09 90)
+    (property "Value" "25 MHz" (id 1) (at 58.42 85.09 90)
       (effects (font (size 1.27 1.27)) (justify right))
     )
     (property "Footprint" "Crystal:Crystal_HC49-U_Vertical" (id 2) (at 62.23 85.09 0)
@@ -6690,7 +6690,7 @@
     (in_bom yes) (on_board yes)
     (uuid 7e261482-6d94-42f1-947b-beece2e5a492)
     (property "Reference" "R15" (id 0) (at 78.74 76.2 90))
-    (property "Value" "12K" (id 1) (at 78.74 81.28 90))
+    (property "Value" "3K" (id 1) (at 78.74 81.28 90))
     (property "Footprint" "Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder" (id 2) (at 78.74 78.74 0)
       (effects (font (size 1.27 1.27)) hide)
     )
@@ -8537,7 +8537,7 @@
       (reference "R14") (unit 1) (value "47K") (footprint "Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder")
     )
     (path "/7e261482-6d94-42f1-947b-beece2e5a492"
-      (reference "R15") (unit 1) (value "12K") (footprint "Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder")
+      (reference "R15") (unit 1) (value "3K") (footprint "Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder")
     )
     (path "/21791df4-b3bc-4d1c-b633-6b787296d71d"
       (reference "R16") (unit 1) (value "47K") (footprint "Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder")
@@ -8624,7 +8624,7 @@
       (reference "U3") (unit 1) (value "STM32F723VET6") (footprint "Package_QFP:LQFP-100_14x14mm_P0.5mm")
     )
     (path "/5650e447-f5ae-4f8b-9d8d-8447b7a1abcd"
-      (reference "Y1") (unit 1) (value "8 MHz") (footprint "Crystal:Crystal_HC49-U_Vertical")
+      (reference "Y1") (unit 1) (value "25 MHz") (footprint "Crystal:Crystal_HC49-U_Vertical")
     )
   )
 )
