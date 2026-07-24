@@ -83,7 +83,7 @@ Pictures/   board photos
 2. [x] **PB13 to VBUS_DATA**: connect PB13 (pin 52) to VBUS_DATA net (J8 VBUS post-fuse) — enables OTG_HS VBUS comparator for USB-C device detection
 3. [x] **LED resistor footprints**: change from R_0201_0603Metric to R_0603 (imperial) for all LED current limiters
 4. [x] **VDDA/VDDPHYHS cap topology**: fix bypass caps from series to parallel (schematic matches the hardware bodge already applied)
-5. [x] **UART2**: add PA2 (TX) / PA3 (RX) 3-pin header for USART2 debug and ROM bootloader DFU
+5. [x] **UART2**: add PA2 (TX) / PA3 (RX) 3-pin header for USART2 debug (note: USART2 is NOT a ROM bootloader UART — use USART3 on PB10/PB11 for DFU, added in v0.3)
 6. [x] **LED2/3/4 pins**: move from PE0/PE1/PE2 to PE9/PE11/PE13 (TIM1 CH1/2/3 AF1) for PWM brightness control
 7. [x] **LCD_RST**: PA1 (was disconnected pin 69 / PA10)
 8. [x] **Version ID inputs**: move from PE11–PE15 to PD3–PD7 (frees PE9/PE11/PE13 for LEDs)
@@ -119,13 +119,21 @@ Pictures/   board photos
 
 ## DFU Notes
 
-The STM32F723 built-in ROM bootloader uses OTG_FS (PA11/PA12) for DFU. Since
-PA11/PA12 are wired to the USB-A host connector, the ROM bootloader is not usable
-without a PC connected there.
+The STM32F723 ROM bootloader supports UART and USB DFU (per AN2606 Table 97):
 
-DFU over USB-C (OTG_HS) requires a firmware implementation — the ROM bootloader
-does not use OTG_HS. A custom DFU class could be triggered by the BOOT button.
-For now, SWD via LPC-LINK2 is the flashing method.
+**UART DFU (preferred):**
+- USART1 (PA9/PA10): conflicts — PA9=OTG_FS VBUS, PA10=OTG_FS_ID. Do not use.
+- USART3 (PB10/PB11): free on v0.2, **correct path**. Not broken out on v0.2 — add header on v0.3.
+- USART3 alt pins (PC10/PC11): conflict with SD card. Do not use.
+- USART2 is NOT supported by the STM32F723 ROM bootloader.
+- Host tool: `stm32flash` (not dfu-util). Bootloader auto-detects baud via 0x7F sync byte.
+- v0.2 PA2/PA3 header (USART2) is useful for debug UART only, not ROM bootloader DFU.
+
+**USB DFU:**
+- OTG_FS (PA11/PA12) ROM bootloader DFU: wired to USB-A host connector — requires PC connected there.
+- OTG_HS (USB-C) DFU: requires custom firmware implementation — ROM bootloader does not use OTG_HS.
+
+For now, SWD via LPC-LINK2 is the primary flashing method.
 
 ## PCB Layout Notes (v0.2)
 
