@@ -3,7 +3,7 @@
 ## Equipment and Materials
 
 - Electric skillet (dedicated, not for food)
-- IR thermometer with adjustable emissivity (e.g., Elitech DIT-220)
+- IR thermometer with adjustable emissivity (Surpeer GM550)
 - Laser-cut stencil (0.12mm for mixed 0603 / LQFP100 0.5mm pitch)
 - Solder paste: Chip Quik TS391AX50 Sn63Pb37 no-clean
 - Aluminum foil
