@@ -64,6 +64,8 @@ Core/Src/syscalls.c \
 Core/Src/gpio.c \
 Core/Src/sdmmc.c \
 Core/Src/spi.c \
+Core/Src/st7735.c \
+Core/Src/fonts.c \
 Drivers/SEGGER_RTT.c \
 Drivers/SEGGER_RTT_printf.c \
 USB_DEVICE/App/usb_device.c \

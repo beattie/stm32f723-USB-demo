@@ -6,6 +6,7 @@
 #include "gpio.h"
 #include "SEGGER_RTT.h"
 #include "usbh_core.h"
+#include "st7735.h"
 
 extern volatile uint32_t usbd_ev_reset, usbd_ev_setup, usbd_ev_suspend, usbd_ev_setup_b0;
 
@@ -24,6 +25,11 @@ int main(void)
     MX_GPIO_Init();       SEGGER_RTT_printf(0, "GPIO ok\r\n");
     MX_SDMMC1_MMC_Init(); SEGGER_RTT_printf(0, "SDMMC ok\r\n");
     MX_SPI1_Init();       SEGGER_RTT_printf(0, "SPI ok\r\n");
+    ST7735_Init();
+    ST7735_FillScreen(ST7735_BLACK);
+    ST7735_WriteString(0, 0, "STM32F723", Font_11x18, ST7735_WHITE, ST7735_BLACK);
+    ST7735_WriteString(0, 20, "Hello World", Font_7x10, ST7735_GREEN, ST7735_BLACK);
+    SEGGER_RTT_printf(0, "Display ok\r\n");
 
     MX_USB_DEVICE_Init(); SEGGER_RTT_printf(0, "USB_DEVICE ok\r\n");
     MX_USB_HOST_Init();   SEGGER_RTT_printf(0, "USB_HOST ok\r\n");
