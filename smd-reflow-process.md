@@ -6,8 +6,7 @@
 - IR thermometer with adjustable emissivity (Surpeer GM550)
 - Laser-cut stencil (0.12mm for mixed 0603 / LQFP100 0.5mm pitch)
 - Solder paste: Chip Quik TS391AX50 Sn63Pb37 no-clean
-- Aluminum foil
-- Black electrical tape (IR reference point)
+- Scrap PCB (temperature reference target — see Skillet Setup)
 - Squeegee or old credit card
 - Tweezers (fine tip) or vacuum pen for component placement
 - Isopropyl alcohol 90%+ and toothbrush for cleaning
@@ -33,9 +32,12 @@ NB: Chip Quick TS391AX50 is listed as Thermally Stable, may not need redrigerati
 
 1. Place silicone mat on work surface, skillet on top
 2. **Do not use aluminum foil** — foil acts as a heat sink and limits peak temperature to ~190°C, which is below the reflow zone for Sn63Pb37. Without foil, the skillet surface cycles correctly between 200–220°C.
-3. For IR temperature reference: use a scrap PCB as your target surface. Mark a small area with black permanent marker and read that spot (emissivity ε=0.95 on the Surpeer GM550). The bare PCB surface is close enough without marker, but the marker area gives a stable reference.
+3. Place a scrap PCB in the skillet as your IR temperature reference target. Set IR thermometer emissivity to ε=0.95 and read the bare PCB surface — permanent marker on PCB reads essentially the same as bare PCB, either works. Keep the reference PCB close to where your board will sit.
 
-**Note:** Bare aluminum foil reads falsely low (reflective surface); black tape or marker on a PCB gives accurate readings at ε=0.95.
+**What does not work for IR reference:**
+- Bare skillet surface: reads 30–50°C cold (reflective metal)
+- Black electrical tape on skillet: also reads cold, and puckers/deforms above 150°C (PVC melts)
+- Black tape or marker must be on a PCB substrate to give accurate readings
 
 ---
 
@@ -43,16 +45,24 @@ NB: Chip Quick TS391AX50 is listed as Thermally Stable, may not need redrigerati
 
 Map your dial to actual temperature before reflowing a real board:
 
-1. Place a scrap PCB with a black-marker reference spot in the skillet
-2. Set IR thermometer emissivity to ε=0.95
-3. Turn skillet to a low setting, wait for temperature to stabilize (~5 minutes)
-4. Measure the marker spot on the PCB
-5. Repeat at several dial positions
-6. Mark the dial at key temperatures: ~150°C (preheat/soak) — the reflow zone (200–220°C) is reached at maximum without foil
+1. Place scrap PCB reference in skillet; set IR thermometer to ε=0.95
+2. Turn skillet to maximum (no foil)
+3. Measure PCB temperature at intervals and note the time
 
-**Observed behavior (this skillet):** At maximum without foil, the surface cycles 200–220°C — heater cuts out at ~220°C and re-engages at ~200°C. This is correct for Sn63Pb37 reflow (liquidus 183°C, peak target 205–215°C).
+**Observed ramp (this skillet, cold start 26°C, maximum dial, no foil):**
 
-Skillet dials are inaccurate — this map is essential.
+| Time | PCB Temperature |
+|------|----------------|
+| 0 min | 26°C (room temp) |
+| 4 min | ~150°C |
+| 7 min | ~200°C |
+| 8.5 min | ~220°C |
+
+Ramp rate is ~0.4°C/s — slow enough that the paste preheat/soak profile is satisfied naturally on the way up. No need to hold at an intermediate temperature.
+
+At maximum, the skillet thermostat cycles 200–220°C — heater cuts at ~220°C, re-engages at ~200°C. This is correct for Sn63Pb37 reflow (liquidus 183°C, peak target 205–215°C).
+
+Skillet dials are inaccurate — calibrate before first use and mark the dial.
 
 ---
 
@@ -101,15 +111,14 @@ Skillet dials are inaccurate — this map is essential.
 | Cool | kill heat, leave on skillet | Let solder solidify before moving |
 
 ### Process
-1. Place scrap PCB reference target in skillet (for IR temperature monitoring)
-2. Place populated board on **cold** skillet — cold start gives a more controlled ramp than pre-heating
-3. Turn dial to ~150°C; wait approximately **2 minutes** — this is the preheat/soak phase (flux activates, solvents evaporate, board temperature equalizes)
-4. Turn dial to **maximum**
-5. Watch the paste: it will go dull/gray → slightly transparent (flux working) → **bright shiny silver** (reflow). The visual transition is the most reliable indicator. **Tip:** apply a small dab of paste to a visible test point or exposed pad on the board — this gives a clear unobstructed view of the reflow transition since paste under IC pins and small components can't be seen directly.
-6. Once reflow is visible across the board, hold for **30–60 seconds** to ensure all joints reach liquidus — the skillet will cycle ~200–220°C during this phase, which is correct
+1. Place scrap PCB reference target in skillet next to where the board will sit
+2. Place populated board on **cold** skillet
+3. Turn dial to **maximum**
+4. Wait — expect approximately **8–9 minutes** before reflow at this ramp rate. The slow ramp naturally covers the preheat and soak phases on the way up; no intermediate dial step needed.
+5. Watch the paste: it will go dull/gray → slightly transparent (flux working) → **bright shiny silver** (reflow). The visual transition is the primary trigger — timing is only a rough guide. **Tip:** apply a small dab of paste to a visible test point or exposed pad — gives an unobstructed view of the reflow transition since paste under IC pins can't be seen directly.
+6. Once reflow is visible, hold for **30–60 seconds** to ensure all joints reach liquidus
 7. **Kill the heat** — turn dial to off
-8. Leave board on skillet until temperature drops below **100°C** before moving — do not touch or disturb while solder is solidifying
-9. Once below 100°C, remove board and allow to finish cooling on the silicone mat
+8. Leave board on skillet until solder solidifies (paste transitions from shiny to matte — typically 1–2 minutes after heat off). Once solidified, move board to silicone mat to finish cooling — no need to wait for 100°C on the skillet once solid.
 
 ---
 
