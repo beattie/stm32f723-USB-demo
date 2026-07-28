@@ -32,8 +32,10 @@ NB: Chip Quick TS391AX50 is listed as Thermally Stable, may not need redrigerati
 ## Skillet Setup
 
 1. Place silicone mat on work surface, skillet on top
-2. Line skillet interior with a single layer of aluminum foil, pressed flat — no air pockets
-3. Place a small piece of black electrical tape on the foil near your board position — this is your IR temperature reference (foil is too shiny for accurate IR readings)
+2. **Do not use aluminum foil** — foil acts as a heat sink and limits peak temperature to ~190°C, which is below the reflow zone for Sn63Pb37. Without foil, the skillet surface cycles correctly between 200–220°C.
+3. For IR temperature reference: use a scrap PCB as your target surface. Mark a small area with black permanent marker and read that spot (emissivity ε=0.95 on the Surpeer GM550). The bare PCB surface is close enough without marker, but the marker area gives a stable reference.
+
+**Note:** Bare aluminum foil reads falsely low (reflective surface); black tape or marker on a PCB gives accurate readings at ε=0.95.
 
 ---
 
@@ -41,10 +43,14 @@ NB: Chip Quick TS391AX50 is listed as Thermally Stable, may not need redrigerati
 
 Map your dial to actual temperature before reflowing a real board:
 
-1. Turn skillet to a low setting, wait for temperature to stabilize (~5 minutes)
-2. Measure the black tape with the IR thermometer
-3. Repeat at several dial positions
-4. Mark the dial at key temperatures: ~150°C (preheat) and ~210°C (reflow)
+1. Place a scrap PCB with a black-marker reference spot in the skillet
+2. Set IR thermometer emissivity to ε=0.95
+3. Turn skillet to a low setting, wait for temperature to stabilize (~5 minutes)
+4. Measure the marker spot on the PCB
+5. Repeat at several dial positions
+6. Mark the dial at key temperatures: ~150°C (preheat/soak) — the reflow zone (200–220°C) is reached at maximum without foil
+
+**Observed behavior (this skillet):** At maximum without foil, the surface cycles 200–220°C — heater cuts out at ~220°C and re-engages at ~200°C. This is correct for Sn63Pb37 reflow (liquidus 183°C, peak target 205–215°C).
 
 Skillet dials are inaccurate — this map is essential.
 
@@ -95,13 +101,15 @@ Skillet dials are inaccurate — this map is essential.
 | Cool | kill heat, leave on skillet | Let solder solidify before moving |
 
 ### Process
-1. Preheat skillet to ~150°C **before** placing the board — cold start causes uneven heating
-2. Place board on foil, monitor temperature on the black tape reference point
-3. Slowly nudge dial toward reflow temperature — avoid rapid ramp
-4. Watch the paste: it will go dull/gray → slightly transparent (flux activating) → **bright shiny silver** (reflow)
-5. As soon as you see reflow across the board, **kill the heat**
-6. Leave board on skillet — do not move it until solder has solidified (goes from shiny to dull)
-7. Once solidified, remove board and allow to finish cooling on the silicone mat
+1. Place scrap PCB reference target in skillet (for IR temperature monitoring)
+2. Place populated board on **cold** skillet — cold start gives a more controlled ramp than pre-heating
+3. Turn dial to ~150°C; wait approximately **2 minutes** — this is the preheat/soak phase (flux activates, solvents evaporate, board temperature equalizes)
+4. Turn dial to **maximum**
+5. Watch the paste: it will go dull/gray → slightly transparent (flux working) → **bright shiny silver** (reflow). The visual transition is the most reliable indicator. **Tip:** apply a small dab of paste to a visible test point or exposed pad on the board — this gives a clear unobstructed view of the reflow transition since paste under IC pins and small components can't be seen directly.
+6. Once reflow is visible across the board, hold for **30–60 seconds** to ensure all joints reach liquidus — the skillet will cycle ~200–220°C during this phase, which is correct
+7. **Kill the heat** — turn dial to off
+8. Leave board on skillet until temperature drops below **100°C** before moving — do not touch or disturb while solder is solidifying
+9. Once below 100°C, remove board and allow to finish cooling on the silicone mat
 
 ---
 
