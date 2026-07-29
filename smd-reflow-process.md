@@ -49,18 +49,30 @@ Map your dial to actual temperature before reflowing a real board:
 2. Turn skillet to maximum (no foil)
 3. Measure PCB temperature at intervals and note the time
 
-**Observed ramp (this skillet, cold start 26°C, maximum dial, no foil):**
+**Observed ramp (this skillet, cold start ~28–33°C, maximum dial, no foil):**
 
-| Time | PCB Temperature |
-|------|----------------|
-| 0 min | 26°C (room temp) |
-| 4 min | ~150°C |
-| 7 min | ~200°C |
-| 8.5 min | ~220°C |
+| Time | PCB Temperature | Event |
+|------|----------------|-------|
+| 0:00 | 28–33°C | Start |
+| 4:00 | ~150°C | |
+| 6:12 | 183°C | Liquidus (up) |
+| 6:21 | ~191°C | Paste goes shiny |
+| 7:00 | ~200°C | |
+| 8:30 | ~220°C | |
 
-Ramp rate is ~0.4°C/s — slow enough that the paste preheat/soak profile is satisfied naturally on the way up. No need to hold at an intermediate temperature.
+Ramp rate is ~0.4°C/s — slow enough that the paste preheat/soak profile is satisfied naturally on the way up. No need to hold at an intermediate temperature. **Liquidus onset is consistent at ~6:21 across multiple runs.**
 
-At maximum, the skillet thermostat cycles 200–220°C — heater cuts at ~220°C, re-engages at ~200°C. This is correct for Sn63Pb37 reflow (liquidus 183°C, peak target 205–215°C).
+**Time above liquidus (TAL) by kill-heat strategy:**
+
+| Strategy | Kill heat | TAL | Peak | Suitable for components? |
+|----------|-----------|-----|------|--------------------------|
+| 220°C dial mark / neon out | ~8:01 | ~5 min | 222°C | No — 6× over spec |
+| Max dial / neon out | ~10:17 | ~9 min | 249°C | No — way over spec |
+| **Liquidus + 30–60s** | **~6:50–7:20** | **~90–108s** | **~200–205°C** | **Yes ✓** |
+
+**Use the liquidus + 30–60s strategy for all populated boards.** The neon-out strategies give excessive TAL and excessive peak temperatures regardless of dial setting — the neon is useful only as a calibration reference, not as the reflow trigger.
+
+**Cooldown:** Move board to silicone mat once reference PCB reads 150°C (solder solidified well above this — tap a large pad gently to confirm if unsure).
 
 Skillet dials are inaccurate — calibrate before first use and mark the dial.
 
@@ -116,9 +128,9 @@ Skillet dials are inaccurate — calibrate before first use and mark the dial.
 3. Turn dial to **maximum**
 4. Wait — expect approximately **8–9 minutes** before reflow at this ramp rate. The slow ramp naturally covers the preheat and soak phases on the way up; no intermediate dial step needed.
 5. Watch the paste: it will go dull/gray → slightly transparent (flux working) → **bright shiny silver** (reflow). The visual transition is the primary trigger — timing is only a rough guide. **Tip:** apply a small dab of paste to a visible test point or exposed pad — gives an unobstructed view of the reflow transition since paste under IC pins can't be seen directly.
-6. Once reflow is visible, hold for **30–60 seconds** to ensure all joints reach liquidus
-7. **Kill the heat** — turn dial to off
-8. Leave board on skillet until solder solidifies (paste transitions from shiny to matte — typically 1–2 minutes after heat off). Once solidified, move board to silicone mat to finish cooling — no need to wait for 100°C on the skillet once solid.
+6. Once reflow is visible, start a timer and hold for **30–60 seconds**
+7. **Kill the heat** — turn dial to off. Do not wait for the neon pilot light to go out; that gives ~5–9 minutes TAL depending on dial setting, which is too long for components.
+8. Leave board on skillet. Move to silicone mat once reference PCB reads **150°C** — solder is solid well before this point. Tap a large pad gently to confirm solidity if uncertain.
 
 ---
 
