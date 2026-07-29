@@ -5986,7 +5986,7 @@
     (uuid 48e4579d-5e85-401f-9ce6-27ca1a2535a0)
     (property "Reference" "J4" (id 0) (at 172.72 109.22 0))
     (property "Value" "Cortex Debug" (id 1) (at 172.72 111.76 0))
-    (property "Footprint" "Connector_PinHeader_1.27mm:PinHeader_2x05_P1.27mm_Vertical" (id 2) (at 173.99 120.65 0)
+    (property "Footprint" "SHF-105-01-F-D-TH:SAMTEC_SHF-105-01-F-D-TH" (id 2) (at 173.99 120.65 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (property "Datasheet" "~" (id 3) (at 173.99 120.65 0)
@@ -8462,7 +8462,7 @@
       (reference "J3") (unit 1) (value "Power_Sel") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical")
     )
     (path "/48e4579d-5e85-401f-9ce6-27ca1a2535a0"
-      (reference "J4") (unit 1) (value "Cortex Debug") (footprint "Connector_PinHeader_1.27mm:PinHeader_2x05_P1.27mm_Vertical")
+      (reference "J4") (unit 1) (value "Cortex Debug") (footprint "SHF-105-01-F-D-TH:SAMTEC_SHF-105-01-F-D-TH")
     )
     (path "/4908c02f-304f-4379-bc6d-3d980e650980"
       (reference "J5") (unit 1) (value "SPI Display") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x10_P2.54mm_Vertical")
