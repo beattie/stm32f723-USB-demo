@@ -104,6 +104,9 @@ Pictures/   board photos
   - SET_PROTOCOL STALL handled non-fatally (AnnePro2 quirk)
   - Keypress ASCII decoding in place; RTT output confirmed
   - Commit: aac26ba
+- [x] ST7735 1.44" display bring-up — "Hello World" confirmed on v0.1 via J5 jumper wires 2026-07-30
+  - v0.1 pinout: CS=PA4, DC=PA8, RST=PA10, BL=PA15, SPI1 at 12MHz
+  - PA10 (previously bodged to GND for OTG_FS_ID) repurposed for LCD_RST; FHMOD handles host mode
 - [ ] USB-C device bring-up — OTG_HS FS PHY init confirmed; PB13 NC on v0.1 blocks D+ pull-up; v0.2 fixes with PB13→VBUS_DATA + VBDEN=1 firmware change
 - [ ] MicroSD bring-up — abandoned on v0.1 (STBITERR, broken connector GND); retry on v0.2 with full-size SD connector
 - [ ] Port password manager demo from stm32f746-disc (Rust) to C

@@ -1,7 +1,2 @@
 build/
-*.o
-*.d
-*.lst
-*.map
-*.bin
-*.hex
+*.swp
