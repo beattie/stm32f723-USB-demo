@@ -5304,7 +5304,7 @@
     (in_bom yes) (on_board yes) (fields_autoplaced)
     (uuid 1a82aba1-7bcd-415b-b242-a8697f42897d)
     (property "Reference" "R20" (id 0) (at 248.92 81.28 90))
-    (property "Value" "68" (id 1) (at 248.92 83.82 90))
+    (property "Value" "390" (id 1) (at 248.92 83.82 90))
     (property "Footprint" "Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder" (id 2) (at 248.92 87.63 0)
       (effects (font (size 1.27 1.27)) hide)
     )
@@ -6432,7 +6432,7 @@
     (in_bom yes) (on_board yes) (fields_autoplaced)
     (uuid 6e07490e-b1ba-4686-bc5c-17b021c96957)
     (property "Reference" "R22" (id 0) (at 248.92 97.79 90))
-    (property "Value" "150" (id 1) (at 248.92 100.33 90))
+    (property "Value" "100" (id 1) (at 248.92 100.33 90))
     (property "Footprint" "Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder" (id 2) (at 248.92 104.14 0)
       (effects (font (size 1.27 1.27)) hide)
     )
@@ -8552,13 +8552,13 @@
       (reference "R19") (unit 1) (value "68") (footprint "Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder")
     )
     (path "/1a82aba1-7bcd-415b-b242-a8697f42897d"
-      (reference "R20") (unit 1) (value "68") (footprint "Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder")
+      (reference "R20") (unit 1) (value "390") (footprint "Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder")
     )
     (path "/d4e6855f-877c-4251-bf9e-698081c7e725"
       (reference "R21") (unit 1) (value "33") (footprint "Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder")
     )
     (path "/6e07490e-b1ba-4686-bc5c-17b021c96957"
-      (reference "R22") (unit 1) (value "150") (footprint "Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder")
+      (reference "R22") (unit 1) (value "100") (footprint "Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder")
     )
     (path "/7fb86b33-f6c8-4735-8ebb-bbd50db9e462"
       (reference "RGB_LED1") (unit 1) (value "Status") (footprint "LED_THT:LED_D5.0mm-4_RGB")
