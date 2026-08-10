@@ -6601,6 +6601,22 @@
     (pin "1" (uuid d09dd38c-14e3-49b3-9968-c5f5499eae1b))
   )
 
+  (symbol (lib_id "power:GND") (at 43.18 90.17 0) (unit 1)
+    (in_bom yes) (on_board yes) (fields_autoplaced)
+    (uuid 77db43a4-cfdb-4b4f-b9a9-ae493460b523)
+    (property "Reference" "#PWR056" (id 0) (at 43.18 96.52 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (property "Value" "GND" (id 1) (at 43.18 95.25 0))
+    (property "Footprint" "" (id 2) (at 43.18 90.17 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (property "Datasheet" "" (id 3) (at 43.18 90.17 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (pin "1" (uuid a0e965cf-aa54-4117-a19d-59edfff854b8))
+  )
+
   (symbol (lib_id "power:GND") (at 20.32 69.85 0) (unit 1)
     (in_bom yes) (on_board yes) (fields_autoplaced)
     (uuid 7b7cfd55-db82-4092-a1ab-1bd88b93d0b1)
@@ -7352,6 +7368,25 @@
     (pin "1" (uuid 1bb54e41-6a7d-4417-918d-34706db214fe))
   )
 
+  (symbol (lib_name "TestPoint_2") (lib_id "Connector:TestPoint") (at 43.18 90.17 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (uuid ac3bf2fd-0ea3-41d3-9d1c-a58bf2caca08)
+    (property "Reference" "TP16" (id 0) (at 45.72 85.5979 0)
+      (effects (font (size 1.27 1.27)) (justify left))
+    )
+    (property "Value" "GND" (id 1) (at 45.72 88.1379 0)
+      (effects (font (size 1.27 1.27)) (justify left))
+    )
+    (property "Footprint" "Alignment:TestPoint_THTPad_D2.0mm_Drill0.8mm_Align" (id 2) (at 48.26 90.17 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (property "Datasheet" "~" (id 3) (at 48.26 90.17 0)
+      (effects (font (size 1.27 1.27)) hide)
+    )
+    (property "Notes" "Align feature" (id 4) (at 49.53 90.17 0))
+    (pin "1" (uuid 2c4b0a29-465d-40e6-8952-a5307b4dd0f3))
+  )
+
   (symbol (lib_name "MountingHole_3") (lib_id "Mechanical:MountingHole") (at 20.32 80.01 0) (unit 1)
     (in_bom yes) (on_board yes) (fields_autoplaced)
     (uuid accccdd8-12e2-4161-b10b-5bfef537426e)
@@ -7554,7 +7589,7 @@
   )
 
   (symbol (lib_name "TestPoint_2") (lib_id "Connector:TestPoint") (at 43.18 76.2 0) (unit 1)
-    (in_bom yes) (on_board yes) (fields_autoplaced)
+    (in_bom yes) (on_board yes)
     (uuid c65cc65e-11e7-41cb-818c-ff91bd78cb55)
     (property "Reference" "TP1" (id 0) (at 45.72 71.6279 0)
       (effects (font (size 1.27 1.27)) (justify left))
@@ -7562,12 +7597,13 @@
     (property "Value" "GND" (id 1) (at 45.72 74.1679 0)
       (effects (font (size 1.27 1.27)) (justify left))
     )
-    (property "Footprint" "TestPoint:TestPoint_THTPad_D2.0mm_Drill1.0mm" (id 2) (at 48.26 76.2 0)
+    (property "Footprint" "Alignment:TestPoint_THTPad_D2.0mm_Drill0.8mm_Align" (id 2) (at 48.26 76.2 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (property "Datasheet" "~" (id 3) (at 48.26 76.2 0)
       (effects (font (size 1.27 1.27)) hide)
     )
+    (property "Notes" "Align feature" (id 4) (at 49.53 76.2 0))
     (pin "1" (uuid 282681a7-23b9-43e6-ab16-c0bd69c75050))
   )
 
@@ -8305,6 +8341,9 @@
     (path "/e7f947ee-b881-4ef2-82d4-fadadfa68855"
       (reference "#PWR055") (unit 1) (value "GND") (footprint "")
     )
+    (path "/77db43a4-cfdb-4b4f-b9a9-ae493460b523"
+      (reference "#PWR056") (unit 1) (value "GND") (footprint "")
+    )
     (path "/2641c309-b1f2-413e-9bab-c17808f1d2ee"
       (reference "#PWR0101") (unit 1) (value "GND") (footprint "Resistor_SMD:R_0603_1608Metric_Pad0.98x0.95mm_HandSolder")
     )
@@ -8570,7 +8609,7 @@
       (reference "SW2") (unit 1) (value "Reset") (footprint "Library:SW_Push_6mm_2pin_5.08mm")
     )
     (path "/c65cc65e-11e7-41cb-818c-ff91bd78cb55"
-      (reference "TP1") (unit 1) (value "GND") (footprint "TestPoint:TestPoint_THTPad_D2.0mm_Drill1.0mm")
+      (reference "TP1") (unit 1) (value "GND") (footprint "Alignment:TestPoint_THTPad_D2.0mm_Drill0.8mm_Align")
     )
     (path "/74d256c6-8769-4186-a255-1aea04864309"
       (reference "TP2") (unit 1) (value "USBC-") (footprint "TestPoint:TestPoint_Pad_D1.0mm")
@@ -8613,6 +8652,9 @@
     )
     (path "/a2062462-b031-4ab0-a0e3-8b476aab5d05"
       (reference "TP15") (unit 1) (value "USBA+") (footprint "TestPoint:TestPoint_Pad_D1.0mm")
+    )
+    (path "/ac3bf2fd-0ea3-41d3-9d1c-a58bf2caca08"
+      (reference "TP16") (unit 1) (value "GND") (footprint "Alignment:TestPoint_THTPad_D2.0mm_Drill0.8mm_Align")
     )
     (path "/bb17c35c-a70d-4760-bafe-90e840af4fd7"
       (reference "U1") (unit 1) (value "AMS1117") (footprint "Package_TO_SOT_SMD:SOT-223-3_TabPin2")
