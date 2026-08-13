@@ -107,6 +107,9 @@ Pictures/   board photos
 - [x] ST7735 1.44" display bring-up — "Hello World" confirmed on v0.1 via J5 jumper wires 2026-07-30
   - v0.1 pinout: CS=PA4, DC=PA8, RST=PA10, BL=PA15, SPI1 at 12MHz
   - PA10 (previously bodged to GND for OTG_FS_ID) repurposed for LCD_RST; FHMOD handles host mode
+- [x] USB-A host bring-up on v0.2 — AnnePro2 enumerates as FS HID keyboard, class active 2026-08-12
+  - PA8 configured as OTG_FS_SOF (AF10) test point; SOF/D+/D- signals confirmed on TP8/TP14/TP15
+  - Plug keyboard after host init (not before) for reliable enumeration
 - [ ] USB-C device bring-up — OTG_HS FS PHY init confirmed; PB13 NC on v0.1 blocks D+ pull-up; v0.2 fixes with PB13→VBUS_DATA + VBDEN=1 firmware change
 - [ ] MicroSD bring-up — abandoned on v0.1 (STBITERR, broken connector GND); retry on v0.2 with full-size SD connector
 - [ ] Port password manager demo from stm32f746-disc (Rust) to C
@@ -115,7 +118,8 @@ Pictures/   board photos
 
 - [x] Schematic complete — all 13 changes applied, ERC/DRC clean — 2026-07-21
 - [x] PCB routed — 2026-07-21
-- [ ] Fab / assemble
+- [x] Fab / assemble
+- [x] USB-A host bring-up — AnnePro2 FS HID keyboard enumerated and active 2026-08-12
 - [ ] USB-C device bring-up (PB13 now connected to VBUS_DATA)
 - [ ] MicroSD bring-up (full-size SD connector)
 - [ ] Firmware: enable VBDEN=1 for USB-C device (remove GOTGCTL bypass, use real VBUS comparator)
