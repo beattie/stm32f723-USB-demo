@@ -1,0 +1,3 @@
+cargo:rustc-link-search=/home/beattie/projects/stm32f723-USB-demo/pm/target/thumbv7em-none-eabihf/debug/build/defmt-103bbda5497f234b/out
+cargo:rustc-check-cfg=cfg(c_variadic)
+cargo:rustc-check-cfg=cfg(no_cas)

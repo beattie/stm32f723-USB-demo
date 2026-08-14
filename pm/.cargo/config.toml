@@ -1,0 +1,8 @@
+[target.thumbv7em-none-eabihf]
+runner = "probe-rs run --chip STM32F723VETx --probe 1fc9:0090"
+
+[build]
+target = "thumbv7em-none-eabihf"
+
+[env]
+DEFMT_LOG = "debug"
