@@ -1,0 +1,22 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug (OpenOCD)",
+            "type": "cortex-debug",
+            "request": "launch",
+            "servertype": "openocd",
+            "executable": "${workspaceFolder}/build/STM32F723_bringup.elf",
+            "interface": "swd",
+            "device": "STM32F723VETx",
+            "runToEntryPoint": "main",
+            "configFiles": [
+                "interface/cmsis-dap.cfg",
+                "target/stm32f7x.cfg"
+            ],
+            "openOCDLaunchCommands": [
+                "cmsis_dap_vid_pid 0x1fc9 0x0090"
+            ]
+        }
+    ]
+}

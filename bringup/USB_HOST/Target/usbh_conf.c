@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "usbh_core.h"
 #include "main.h"
 
@@ -13,9 +14,9 @@ void HAL_HCD_MspInit(HCD_HandleTypeDef *hcd)
     clk.Clk48ClockSelection  = RCC_CLK48SOURCE_PLL;  /* PLLQ = 48 MHz */
     HAL_RCCEx_PeriphCLKConfig(&clk);
 
-    /* PA11 = DM, PA12 = DP — OTG_FS AF10 */
+    /* PA8 = OTG_FS_SOF (1kHz debug output), PA11 = DM, PA12 = DP — OTG_FS AF10 */
     __HAL_RCC_GPIOA_CLK_ENABLE();
-    gpio.Pin       = GPIO_PIN_11 | GPIO_PIN_12;
+    gpio.Pin       = GPIO_PIN_8 | GPIO_PIN_11 | GPIO_PIN_12;
     gpio.Mode      = GPIO_MODE_AF_PP;
     gpio.Pull      = GPIO_NOPULL;
     gpio.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
@@ -38,7 +39,13 @@ void HAL_HCD_MspDeInit(HCD_HandleTypeDef *hcd)
 void HAL_HCD_SOF_Callback(HCD_HandleTypeDef *hcd)          { USBH_LL_IncTimer(hcd->pData); }
 void HAL_HCD_Connect_Callback(HCD_HandleTypeDef *hcd)       { USBH_LL_Connect(hcd->pData); }
 void HAL_HCD_Disconnect_Callback(HCD_HandleTypeDef *hcd)    { USBH_LL_Disconnect(hcd->pData); }
-void HAL_HCD_PortEnabled_Callback(HCD_HandleTypeDef *hcd)   { USBH_LL_PortEnabled(hcd->pData); }
+void HAL_HCD_PortEnabled_Callback(HCD_HandleTypeDef *hcd)
+{
+    USBH_LL_PortEnabled(hcd->pData);
+    /* speed: 0=HS 1=FS 2=LS */
+    printf("Port enabled: speed=%lu\r\n",
+        HAL_HCD_GetCurrentSpeed(hcd));
+}
 void HAL_HCD_PortDisabled_Callback(HCD_HandleTypeDef *hcd)  { USBH_LL_PortDisabled(hcd->pData); }
 void HAL_HCD_HC_NotifyURBChange_Callback(HCD_HandleTypeDef *hcd, uint8_t chnum, HCD_URBStateTypeDef urb_state) { }
 
@@ -127,11 +134,12 @@ USBH_URBStateTypeDef USBH_LL_GetURBState(USBH_HandleTypeDef *phost, uint8_t pipe
 
 USBH_StatusTypeDef USBH_LL_DriverVBUS(USBH_HandleTypeDef *phost, uint8_t state)
 {
-    /* PB0 = USBA_EN: TPS2065C active-high enable (v0.2 only; v0.1 has always-on polyfuse) */
+    /* PB0 = USBA_EN: TPS2065C active-high enable.
+     * Keep VBUS on permanently once enabled — middleware cycles VBUS on error
+     * recovery which power-cycles the device and prevents enumeration. */
     if (state)
         GPIOB->BSRR = GPIO_PIN_0;
-    else
-        GPIOB->BSRR = GPIO_PIN_0 << 16;
+    /* disable ignored: let middleware believe it cycled VBUS */
     return USBH_OK;
 }
 

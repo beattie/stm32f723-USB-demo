@@ -1,141 +1,153 @@
 #include "main.h"
+#include "gpio.h"
 #include "sdmmc.h"
 #include "spi.h"
-#include "usb_device.h"
-#include "usb_host.h"
-#include "gpio.h"
-#include "SEGGER_RTT.h"
-#include "usbh_core.h"
 #include "st7735.h"
-
-extern volatile uint32_t usbd_ev_reset, usbd_ev_setup, usbd_ev_suspend, usbd_ev_setup_b0;
+#include "usb_host.h"
+#include "usbh_hid.h"
+#include "usb_device.h"
+#include "usbd_hid.h"
+#include <stdio.h>
+#include <string.h>
 
 void SystemClock_Config(void);
 static void MPU_Config(void);
-static void test_pin(GPIO_TypeDef *port, uint16_t pin, const char *name);
+static void USART2_Init(void);
+static void sd_pin_test(void);
+
+UART_HandleTypeDef huart2;
+
+/* v0.2 LED chase: PE9=BLUE, PE11=GREEN, PE13=YELLOW, PB4=RGB_R, PB5=RGB_G, PB6=RGB_B */
+static const struct { GPIO_TypeDef *port; uint16_t pin; const char *name; } leds[] = {
+    { GPIOE, GPIO_PIN_9,  "PE9  BLUE"  },
+    { GPIOE, GPIO_PIN_11, "PE11 GREEN" },
+    { GPIOE, GPIO_PIN_13, "PE13 YELLOW"},
+    { GPIOB, GPIO_PIN_4,  "PB4  RGB_R" },
+    { GPIOB, GPIO_PIN_5,  "PB5  RGB_G" },
+    { GPIOB, GPIO_PIN_6,  "PB6  RGB_B" },
+};
+#define NUM_LEDS (sizeof(leds)/sizeof(leds[0]))
 
 int main(void)
 {
-    SEGGER_RTT_printf(0, "Hello World\r\n");
-
     MPU_Config();
     HAL_Init();
     SystemClock_Config();
 
-    MX_GPIO_Init();       SEGGER_RTT_printf(0, "GPIO ok\r\n");
-    MX_SDMMC1_MMC_Init(); SEGGER_RTT_printf(0, "SDMMC ok\r\n");
-    MX_SPI1_Init();       SEGGER_RTT_printf(0, "SPI ok\r\n");
+    MX_GPIO_Init();
+    USART2_Init();
+    setvbuf(stdout, NULL, _IONBF, 0);  /* disable stdio buffering — flush every printf immediately */
+    printf("GPIO ok — SYSCLK=%lu PCLK1=%lu PCLK2=%lu Hz\r\n",
+        HAL_RCC_GetSysClockFreq(), HAL_RCC_GetPCLK1Freq(), HAL_RCC_GetPCLK2Freq());
+    MX_SPI1_Init();
+    ST7735_Unselect();
     ST7735_Init();
     ST7735_FillScreen(ST7735_BLACK);
     ST7735_WriteString(0, 0, "STM32F723", Font_11x18, ST7735_WHITE, ST7735_BLACK);
-    ST7735_WriteString(0, 20, "Hello World", Font_7x10, ST7735_GREEN, ST7735_BLACK);
-    SEGGER_RTT_printf(0, "Display ok\r\n");
+    ST7735_WriteString(0, 20, "v0.2 OK", Font_7x10, ST7735_GREEN, ST7735_BLACK);
+    printf("Display ok\r\n");
 
-    MX_USB_DEVICE_Init(); SEGGER_RTT_printf(0, "USB_DEVICE ok\r\n");
-    MX_USB_HOST_Init();   SEGGER_RTT_printf(0, "USB_HOST ok\r\n");
+    MX_USB_HOST_Init();
+    HAL_Delay(500);  /* let TPS2065C/device settle before first enumeration attempt */
+    printf("USB-A host started — plug keyboard\r\n");
 
-    /* OTG_FS host register dump — verify host mode init */
-    SEGGER_RTT_printf(0, "FS GUSBCFG=%08lX (FHMOD bit29 should=1)\r\n",  (unsigned long)USB_OTG_FS->GUSBCFG);
-    SEGGER_RTT_printf(0, "FS GINTSTS=%08lX (CMOD bit0: 1=host 0=device)\r\n", (unsigned long)USB_OTG_FS->GINTSTS);
-    SEGGER_RTT_printf(0, "FS HPRT   =%08lX (PCSTS bit0=port connect)\r\n",
-        (unsigned long)*(volatile uint32_t *)(USB_OTG_FS_PERIPH_BASE + USB_OTG_HOST_PORT_BASE));
+    MX_USB_DEVICE_Init();
+    printf("USB-C device started (OTG_HS OTGPHYC) — plug to PC\r\n");
 
-    /* OTG_HS device register dump — verify FS PHY + VBUS sensing init */
-    SEGGER_RTT_printf(0, "HS GUSBCFG=%08lX (PHYSEL bit6=1, FDMOD bit30=1)\r\n",  (unsigned long)USB_OTG_HS->GUSBCFG);
-    SEGGER_RTT_printf(0, "HS GCCFG  =%08lX (PWRDWN bit16=1, VBDEN bit21=1 needed empirically)\r\n", (unsigned long)USB_OTG_HS->GCCFG);
-    SEGGER_RTT_printf(0, "HS GOTGCTL=%08lX (BVALOEN bit6=1, BVALOVAL bit7=1 needed; BSESVLD bit19=1 means D+ up)\r\n", (unsigned long)USB_OTG_HS->GOTGCTL);
+    sd_pin_test();
+
+    MX_SDMMC1_SD_Init();
     {
-        USB_OTG_DeviceTypeDef *dev = (USB_OTG_DeviceTypeDef *)(USB_OTG_HS_PERIPH_BASE + USB_OTG_DEVICE_BASE);
-        SEGGER_RTT_printf(0, "HS DCTL   =%08lX (SDIS bit1=0 means D+ pullup active)\r\n",  (unsigned long)dev->DCTL);
-        SEGGER_RTT_printf(0, "HS DCFG   =%08lX (DSPD bits1:0 should=11)\r\n", (unsigned long)dev->DCFG);
+        HAL_SD_CardInfoTypeDef info;
+        HAL_SD_GetCardInfo(&hsd1, &info);
+        HAL_SD_CardStateTypeDef cstate = HAL_SD_GetCardState(&hsd1);
+        printf("SD state=%u err=%08lX cardstate=%u type=%u ver=%u blocks=%lu bsize=%lu\r\n",
+            (unsigned)hsd1.State, hsd1.ErrorCode, (unsigned)cstate,
+            (unsigned)info.CardType, (unsigned)info.CardVersion,
+            info.BlockNbr, info.BlockSize);
+        /* dump raw CSD from handle */
+        printf("  RCA=%04lX CSD: %08lX %08lX %08lX %08lX\r\n",
+            hsd1.SdCard.RelCardAdd,
+            hsd1.CSD[0], hsd1.CSD[1], hsd1.CSD[2], hsd1.CSD[3]);
     }
-    /* GPIO register dump: verify PB14/PB15 are in AF12 (MODER=10, AFR=12) */
-    SEGGER_RTT_printf(0, "PB MODER  =%08lX (bits[31:28] for PB15/14 should=1010)\r\n", (unsigned long)GPIOB->MODER);
-    SEGGER_RTT_printf(0, "PB AFRH   =%08lX (bits[31:24] for PB15/14 should=0xCC=AF12)\r\n", (unsigned long)GPIOB->AFR[1]);
-    /* PB4 = TIM3_CH1 AF2: 1 MHz square wave to verify HSE/PLL on scope
-     * APB1 = 48 MHz, TIM3 = APB1×2 = 96 MHz; PSC=0 ARR=95 → 1 MHz */
-    __HAL_RCC_TIM3_CLK_ENABLE();
-    {
-        GPIO_InitTypeDef g = {0};
-        g.Pin = GPIO_PIN_4; g.Mode = GPIO_MODE_AF_PP;
-        g.Pull = GPIO_NOPULL; g.Speed = GPIO_SPEED_FREQ_HIGH;
-        g.Alternate = GPIO_AF2_TIM3;
-        HAL_GPIO_Init(GPIOB, &g);
-    }
-    TIM3->PSC = 0; TIM3->ARR = 95; TIM3->CCR1 = 47;
-    TIM3->CCMR1 = (6 << TIM_CCMR1_OC1M_Pos);  /* PWM mode 1 */
-    TIM3->CCER  = TIM_CCER_CC1E;
-    TIM3->EGR   = TIM_EGR_UG;
-    TIM3->CR1   = TIM_CR1_CEN;
-    SEGGER_RTT_printf(0, "TIM3 CH1 1MHz on PB4\r\n");
 
-    uint32_t led_tick = 0, led_phase = 0, log_tick = 0;
-    uint32_t cnt_done = 0, cnt_notready = 0, cnt_idle = 0, cnt_other = 0;
-    uint8_t itf_dumped = 0;
-    uint16_t cfg_dump_offset = 0;
+    uint32_t disp_tick = 0;
+    uint32_t disp_phase = 0;
+    static const uint16_t colors[] = { ST7735_RED, ST7735_GREEN, ST7735_BLUE, ST7735_WHITE, ST7735_BLACK };
+    uint32_t led_tick = 0;
+    uint32_t led_phase = 0;
+    uint32_t uart_tick = 0;
+    uint32_t uart_count = 0;
+    uint8_t rx_byte;
 
     while (1)
     {
+        /* Display color cycle: new color every 2s */
+        if (HAL_GetTick() - disp_tick >= 2000)
+        {
+            disp_tick = HAL_GetTick();
+            ST7735_FillScreen(colors[disp_phase]);
+            disp_phase = (disp_phase + 1) % 5;
+        }
+
+        /* LED chase at 250ms per phase */
+        if (HAL_GetTick() - led_tick >= 250)
+        {
+            led_tick = HAL_GetTick();
+
+            HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9|GPIO_PIN_11|GPIO_PIN_13, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6,   GPIO_PIN_RESET);
+
+            HAL_GPIO_WritePin(leds[led_phase].port, leds[led_phase].pin, GPIO_PIN_SET);
+            led_phase = (led_phase + 1) % NUM_LEDS;
+        }
+
+#ifdef UART_TICKS
+        /* UART TX: send tick every second */
+        if (HAL_GetTick() - uart_tick >= 1000)
+        {
+            uart_tick = HAL_GetTick();
+            char buf[32];
+            int len = snprintf(buf, sizeof(buf), "tick %lu\r\n", uart_count++);
+            HAL_UART_Transmit(&huart2, (uint8_t *)buf, len, 10);
+        }
+#endif
+
+        /* UART RX: echo any received byte */
+        if (HAL_UART_Receive(&huart2, &rx_byte, 1, 0) == HAL_OK)
+        {
+            HAL_UART_Transmit(&huart2, &rx_byte, 1, 10);
+        }
+
+        /* USB-A host */
         MX_USB_HOST_Process();
 
-        /* Direct keyboard report from HID IN pipe */
-        if (kbd_report_new) {
+        if (kbd_report_new)
+        {
             kbd_report_new = 0;
-            uint8_t *d = kbd_report;
-            uint8_t len = kbd_report_len;
-            /* Dump first 8 bytes raw; handles boot-protocol and NKRO with/without report ID */
-            int any = 0;
-            for (uint8_t k = 0; k < len && k < 8; k++) if (d[k]) { any = 1; break; }
-            if (any) {
-                SEGGER_RTT_printf(0, "KBD[%u]: %02X %02X %02X %02X %02X %02X %02X %02X\r\n",
-                    len, d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7]);
-                cnt_done++;
-            } else {
-                cnt_notready++;  /* idle / all-zero report */
-            }
-        }
-
-        /* LED chase: PE0/PE1/PE2 at 250 ms per phase */
-        if (HAL_GetTick() - led_tick >= 250) {
-            led_tick = HAL_GetTick();
-            HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2, GPIO_PIN_RESET);
-            if      (led_phase == 0) HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_SET);
-            else if (led_phase == 1) HAL_GPIO_WritePin(GPIOE, GPIO_PIN_1, GPIO_PIN_SET);
-            else                     HAL_GPIO_WritePin(GPIOE, GPIO_PIN_2, GPIO_PIN_SET);
-            led_phase = (led_phase + 1) % 3;
-        }
-
-        /* USB host status every 2 s */
-        if (HAL_GetTick() - log_tick >= 2000) {
-            log_tick = HAL_GetTick();
-            /* Dump raw config descriptor 16 bytes at a time until complete */
-            if (Appli_state == APPLICATION_READY && !itf_dumped) {
-                uint16_t total = hUsbHostFS.device.CfgDesc.wTotalLength;
-                uint8_t *raw = hUsbHostFS.device.CfgDesc_Raw;
-                uint16_t end = cfg_dump_offset + 16;
-                if (end > total) end = total;
-                SEGGER_RTT_printf(0, "CFG[%03u]:", cfg_dump_offset);
-                for (uint16_t j = cfg_dump_offset; j < end; j++)
-                    SEGGER_RTT_printf(0, " %02X", raw[j]);
-                SEGGER_RTT_printf(0, "\r\n");
-                cfg_dump_offset = end;
-                if (cfg_dump_offset >= total)
-                    itf_dumped = 1;
-            }
+            HID_KEYBD_Info_TypeDef *k = USBH_HID_GetKeybdInfo(&hUsbHostFS);
+            if (k)
             {
-                USB_OTG_DeviceTypeDef *dev = (USB_OTG_DeviceTypeDef *)(USB_OTG_HS_PERIPH_BASE + USB_OTG_DEVICE_BASE);
-                SEGGER_RTT_printf(0, "USBH gState=%d Appli=%d mps=%u | kbdrep=%lu idle=%lu | dev rst=%lu setup=%lu(b1=%02lX) susp=%lu | GOTGCTL=%08lX DCTL=%08lX\r\n",
-                    (int)hUsbHostFS.gState, (int)Appli_state,
-                    (unsigned)kbd_report_len, cnt_done, cnt_notready,
-                    usbd_ev_reset, usbd_ev_setup, usbd_ev_setup_b0, usbd_ev_suspend,
-                    (unsigned long)USB_OTG_HS->GOTGCTL, (unsigned long)dev->DCTL);
+                /* Build standard 8-byte boot keyboard HID report */
+                uint8_t report[8];
+                report[0] = (k->lctrl  << 0) | (k->lshift << 1) | (k->lalt  << 2) | (k->lgui  << 3) |
+                            (k->rctrl  << 4) | (k->rshift << 5) | (k->ralt  << 6) | (k->rgui  << 7);
+                report[1] = 0x00;
+                memcpy(&report[2], k->keys, 6);
+
+                USBD_HID_SendReport(&hUsbDeviceHS, report, sizeof(report));
+
+                uint8_t ascii = USBH_HID_GetASCIICode(k);
+                if (ascii)
+                    printf("KEY: '%c' (0x%02X)\r\n", ascii, ascii);
+                else if (k->keys[0])
+                    printf("KEY: keycode=0x%02X\r\n", k->keys[0]);
             }
-            cnt_done = cnt_notready = cnt_idle = cnt_other = 0;
         }
     }
 }
 
-/* 8 MHz HSE → PLL → SYSCLK=192 MHz, APB1=48 MHz, APB2=96 MHz, PLLQ=48 MHz (USB) */
+/* Step 2: HSE 25 MHz → PLL → SYSCLK=216 MHz, APB1=54 MHz, APB2=108 MHz, PLLQ=48 MHz */
 void SystemClock_Config(void)
 {
     __HAL_RCC_PWR_CLK_ENABLE();
@@ -146,10 +158,10 @@ void SystemClock_Config(void)
     osc.HSEState            = RCC_HSE_ON;
     osc.PLL.PLLState        = RCC_PLL_ON;
     osc.PLL.PLLSource       = RCC_PLLSOURCE_HSE;
-    osc.PLL.PLLM            = 4;    /* 8 MHz / 4 = 2 MHz VCO input */
-    osc.PLL.PLLN            = 192;  /* × 192 = 384 MHz VCO */
-    osc.PLL.PLLP            = RCC_PLLP_DIV2;  /* 192 MHz SYSCLK */
-    osc.PLL.PLLQ            = 8;    /* 48 MHz USB */
+    osc.PLL.PLLM            = 25;   /* 25 MHz / 25 = 1 MHz VCO input */
+    osc.PLL.PLLN            = 432;  /* × 432 = 432 MHz VCO */
+    osc.PLL.PLLP            = RCC_PLLP_DIV2;  /* 216 MHz SYSCLK */
+    osc.PLL.PLLQ            = 9;    /* 48 MHz USB */
     if (HAL_RCC_OscConfig(&osc) != HAL_OK)
         Error_Handler();
 
@@ -163,7 +175,7 @@ void SystemClock_Config(void)
     clk.AHBCLKDivider  = RCC_SYSCLK_DIV1;
     clk.APB1CLKDivider = RCC_HCLK_DIV4;
     clk.APB2CLKDivider = RCC_HCLK_DIV2;
-    if (HAL_RCC_ClockConfig(&clk, FLASH_LATENCY_6) != HAL_OK)
+    if (HAL_RCC_ClockConfig(&clk, FLASH_LATENCY_7) != HAL_OK)
         Error_Handler();
 }
 
@@ -188,8 +200,7 @@ static void MPU_Config(void)
     HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
 }
 
-/* SD/MMC connector solder joint test: float each pin and check pull-up/pull-down response.
- * A healthy floating pin follows the pull; a stuck or shorted pin does not. */
+
 static void test_pin(GPIO_TypeDef *port, uint16_t pin, const char *name)
 {
     GPIO_InitTypeDef g = {0};
@@ -203,23 +214,53 @@ static void test_pin(GPIO_TypeDef *port, uint16_t pin, const char *name)
     const char *result = (hi == 1 && lo == 0) ? "OK (floating)" :
                          (hi == 1 && lo == 1) ? "STUCK HIGH"    :
                          (hi == 0 && lo == 0) ? "STUCK LOW"     : "?";
-    SEGGER_RTT_printf(0, "  %-12s hi=%d lo=%d  %s\r\n", name, hi, lo, result);
+    printf("  %-10s hi=%d lo=%d  %s\r\n", name, hi, lo, result);
 }
 
-void mmc_pin_test(void)
+static void sd_pin_test(void)
 {
-    SEGGER_RTT_printf(0, "MMC pin test:\r\n");
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    printf("SD pin test (no card):\r\n");
     test_pin(GPIOC, GPIO_PIN_8,  "PC8  D0");
     test_pin(GPIOC, GPIO_PIN_9,  "PC9  D1");
     test_pin(GPIOC, GPIO_PIN_10, "PC10 D2");
     test_pin(GPIOC, GPIO_PIN_11, "PC11 D3");
-    test_pin(GPIOB, GPIO_PIN_8,  "PB8  D4");
-    test_pin(GPIOB, GPIO_PIN_9,  "PB9  D5");
-    test_pin(GPIOC, GPIO_PIN_6,  "PC6  D6");
-    test_pin(GPIOC, GPIO_PIN_7,  "PC7  D7");
     test_pin(GPIOC, GPIO_PIN_12, "PC12 CLK");
     test_pin(GPIOD, GPIO_PIN_2,  "PD2  CMD");
-    SEGGER_RTT_printf(0, "MMC pin test done\r\n");
+    test_pin(GPIOE, GPIO_PIN_3,  "PE3  CDET");
+    printf("SD pin test done\r\n");
+}
+
+/* USART2: PA2=TX (AF7), PA3=RX (AF7), 115200 8N1 — v0.2 debug header */
+static void USART2_Init(void)
+{
+    __HAL_RCC_USART2_CLK_ENABLE();
+
+    GPIO_InitTypeDef g = {0};
+    g.Pin       = GPIO_PIN_2 | GPIO_PIN_3;
+    g.Mode      = GPIO_MODE_AF_PP;
+    g.Pull      = GPIO_NOPULL;
+    g.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
+    g.Alternate = GPIO_AF7_USART2;
+    HAL_GPIO_Init(GPIOA, &g);
+
+    huart2.Instance          = USART2;
+    huart2.Init.BaudRate     = 115200;
+    huart2.Init.WordLength   = UART_WORDLENGTH_8B;
+    huart2.Init.StopBits     = UART_STOPBITS_1;
+    huart2.Init.Parity       = UART_PARITY_NONE;
+    huart2.Init.Mode         = UART_MODE_TX_RX;
+    huart2.Init.HwFlowCtl   = UART_HWCONTROL_NONE;
+    huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+    if (HAL_UART_Init(&huart2) != HAL_OK)
+        Error_Handler();
+
+    /* Direct register smoke test — confirms PA2 TX path before stdio init */
+    const char *hw = "\r\nUART2 HW OK\r\n";
+    for (const char *p = hw; *p; p++) {
+        while (!(USART2->ISR & USART_ISR_TXE));
+        USART2->TDR = (uint8_t)*p;
+    }
 }
 
 void Error_Handler(void)

@@ -53,7 +53,7 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
-
+extern UART_HandleTypeDef huart2;  /* UART2 PA2/PA3 — primary debug output */
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/

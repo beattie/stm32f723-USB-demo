@@ -1,7 +1,7 @@
+#include <stdio.h>
 #include "usb_host.h"
 #include "usbh_core.h"
 #include "usbh_hid.h"
-#include "SEGGER_RTT.h"
 #include <string.h>
 
 USBH_HandleTypeDef hUsbHostFS;
@@ -46,16 +46,16 @@ static void USBH_UserProcess(USBH_HandleTypeDef *phost, uint8_t id)
     switch (id) {
     case HOST_USER_CONNECTION:
         Appli_state = APPLICATION_START;
-        SEGGER_RTT_printf(0, "USB-A: device connected\r\n");
+        printf("USB-A: device connected\r\n");
         break;
     case HOST_USER_DISCONNECTION:
         Appli_state = APPLICATION_DISCONNECT;
         kbd_report_new = 0;
-        SEGGER_RTT_printf(0, "USB-A: device disconnected\r\n");
+        printf("USB-A: device disconnected\r\n");
         break;
     case HOST_USER_CLASS_ACTIVE:
         Appli_state = APPLICATION_READY;
-        SEGGER_RTT_printf(0, "USB-A: class active\r\n");
+        printf("USB-A: class active\r\n");
         break;
     case HOST_USER_SELECT_CONFIGURATION:
     default:

@@ -1,3 +1,4 @@
+#include <stdio.h>
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
@@ -24,6 +25,7 @@
 #include "usbd_core.h"
 #include "usbd_desc.h"
 #include "usbd_hid.h"
+#include "stm32f7xx_hal.h"
 
 /* USER CODE BEGIN Includes */
 
@@ -81,7 +83,11 @@ void MX_USB_DEVICE_Init(void)
   }
 
   /* USER CODE BEGIN USB_DEVICE_Init_PostTreatment */
-
+  printf("USB-C regs: GUSBCFG=%08lX GCCFG=%08lX GOTGCTL=%08lX DCTL=%08lX\r\n",
+      USB_OTG_HS->GUSBCFG,
+      USB_OTG_HS->GCCFG,
+      USB_OTG_HS->GOTGCTL,
+      ((USB_OTG_DeviceTypeDef *)((uint32_t)USB_OTG_HS + USB_OTG_DEVICE_BASE))->DCTL);
   /* USER CODE END USB_DEVICE_Init_PostTreatment */
 }
 

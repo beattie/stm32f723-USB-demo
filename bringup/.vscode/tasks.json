@@ -1,0 +1,26 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "probe-rs gdb server",
+            "type": "shell",
+            "command": "probe-rs gdb --chip STM32F723VETx --probe 1fc9:0090",
+            "isBackground": true,
+            "problemMatcher": {
+                "pattern": { "regexp": "^$" },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "^Firing up GDB stub",
+                    "endsPattern": "^$"
+                }
+            }
+        },
+        {
+            "label": "build",
+            "type": "shell",
+            "command": "make -C ${workspaceFolder} -j4",
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": "$gcc"
+        }
+    ]
+}

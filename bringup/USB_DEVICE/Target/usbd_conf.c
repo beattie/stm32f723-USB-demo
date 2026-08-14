@@ -1,3 +1,4 @@
+#include <stdio.h>
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
@@ -70,21 +71,11 @@ static void SystemClockConfig_Resume(void);
 void HAL_PCD_MspInit(PCD_HandleTypeDef* pcdHandle)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
   if(pcdHandle->Instance==USB_OTG_HS)
   {
   /* USER CODE BEGIN USB_OTG_HS_MspInit 0 */
 
   /* USER CODE END USB_OTG_HS_MspInit 0 */
-
-  /** Initializes the peripherals clock
-  */
-    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_CLK48;
-    PeriphClkInitStruct.Clk48ClockSelection = RCC_CLK48SOURCE_PLL;
-    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
-    {
-      Error_Handler();
-    }
 
     __HAL_RCC_GPIOB_CLK_ENABLE();
     /**USB_OTG_HS GPIO Configuration
@@ -98,8 +89,13 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef* pcdHandle)
     GPIO_InitStruct.Alternate = GPIO_AF12_OTG_HS_FS;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-    /* Peripheral clock enable — FS serial transceiver only, no OTGPHYC needed */
+    /* All three clocks required: OTG_HS AHB, OTG_HS ULPI AHB, and OTGPHYC APB2.
+     * ULPI clock (AHB1ENR bit 30) needed even for embedded OTGPHYC mode.
+     * OTGPHYC clock must be enabled before HAL_PCD_Init calls USB_HS_PHYCInit;
+     * HSE_VALUE=25MHz → HAL selects PLLSEL=5 automatically. */
     __HAL_RCC_USB_OTG_HS_CLK_ENABLE();
+    __HAL_RCC_USB_OTG_HS_ULPI_CLK_ENABLE();
+    __HAL_RCC_OTGPHYC_CLK_ENABLE();
 
     /* Peripheral interrupt init */
     HAL_NVIC_SetPriority(OTG_HS_IRQn, 5, 0);  /* <5 allows SWD/DAP to preempt for RTT debug */
@@ -354,29 +350,30 @@ USBD_StatusTypeDef USBD_LL_Init(USBD_HandleTypeDef *pdev)
 
   hpcd_USB_OTG_HS.Instance = USB_OTG_HS;
   hpcd_USB_OTG_HS.Init.dev_endpoints = 9;
+  hpcd_USB_OTG_HS.Init.speed = PCD_SPEED_HIGH;
   hpcd_USB_OTG_HS.Init.dma_enable = DISABLE;
-  hpcd_USB_OTG_HS.Init.phy_itface = USB_OTG_EMBEDDED_PHY;  /* internal FS serial transceiver (PHYSEL=1), not OTGPHYC */
+  hpcd_USB_OTG_HS.Init.phy_itface = USB_OTG_HS_EMBEDDED_PHY;  /* OTGPHYC; HSE=25MHz → PLLSEL=5 auto-selected; DSPD=01 = FS via HS PHY */
   hpcd_USB_OTG_HS.Init.Sof_enable = DISABLE;
   hpcd_USB_OTG_HS.Init.low_power_enable = DISABLE;
   hpcd_USB_OTG_HS.Init.lpm_enable = DISABLE;
-  hpcd_USB_OTG_HS.Init.vbus_sensing_enable = DISABLE;  /* disable HAL VBUS IRQ — prevent mid-enum disconnect on PB13 bodge glitch */
+  hpcd_USB_OTG_HS.Init.vbus_sensing_enable = DISABLE;  /* BVALOEN+BVALOVAL override below; keeps session valid without HAL VBUS IRQ */
   hpcd_USB_OTG_HS.Init.use_dedicated_ep1 = DISABLE;
   hpcd_USB_OTG_HS.Init.use_external_vbus = DISABLE;
-  if (HAL_PCD_Init(&hpcd_USB_OTG_HS) != HAL_OK)
+  printf("USB-C: HAL_PCD_Init start (OTGPHYC LDO wait...)\r\n");
+  HAL_StatusTypeDef pcd_status = HAL_PCD_Init(&hpcd_USB_OTG_HS);
+  printf("USB-C: HAL_PCD_Init done, status=%d LDO=%08lX PLL=%08lX\r\n",
+      pcd_status,
+      USB_HS_PHYC->USB_HS_PHYC_LDO,
+      USB_HS_PHYC->USB_HS_PHYC_PLL);
+  if (pcd_status != HAL_OK)
   {
     Error_Handler( );
   }
 
 /* USER CODE BEGIN USBD_LL_Init_PostInit */
-  /* vbus_sensing_enable=DISABLE makes HAL set VBDEN=0+BVALOEN+BVALOVAL=1.
-   * Despite the RM describing VBDEN as only a comparator enable, empirically
-   * VBDEN=0 leaves TP12 (USB-C D+) at 0V — the internal FS transceiver does
-   * not drive D+ without VBDEN=1. BVALOEN/BVALOVAL alone are insufficient.
-   * Set VBDEN=1 to activate the transceiver. The board has the PB13 bodge
-   * wire (PB13 → VBUS_DATA), so the VBUS comparator sees real VBUS and
-   * BSESVLD=1 whenever the cable is connected. */
-  USB_OTG_HS->GCCFG   |= USB_OTG_GCCFG_VBDEN;
-  USB_OTG_HS->GOTGCTL |= USB_OTG_GOTGCTL_BVALOEN | USB_OTG_GOTGCTL_BVALOVAL;
+  /* vbus_sensing_enable=DISABLE: HAL sets GCCFG.VBDEN=0 and GOTGCTL BVALOEN+BVALOVAL=1
+   * (software B-session valid override). D+ pull-up activates regardless of real VBUS.
+   * When v0.2 VBUS sensing via PB13 is needed, switch to vbus_sensing_enable=ENABLE. */
 /* USER CODE END USBD_LL_Init_PostInit */
 
 #if (USE_HAL_PCD_REGISTER_CALLBACKS == 1U)

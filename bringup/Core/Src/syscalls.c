@@ -29,6 +29,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <sys/times.h>
+#include "main.h"
 
 
 /* Variables */
@@ -77,14 +78,16 @@ __attribute__((weak)) int _read(int file, char *ptr, int len)
   return len;
 }
 
-__attribute__((weak)) int _write(int file, char *ptr, int len)
+int _write(int file, char *ptr, int len)
 {
   (void)file;
-  int DataIdx;
-
-  for (DataIdx = 0; DataIdx < len; DataIdx++)
-  {
-    __io_putchar(*ptr++);
+  /* Direct USART2 register write — ISR-safe, no HAL_GetTick() dependency.
+   * Guard against pre-init calls: check USART2EN clock gate. */
+  if (!(RCC->APB1ENR & RCC_APB1ENR_USART2EN))
+    return len;
+  for (int i = 0; i < len; i++) {
+    while (!(USART2->ISR & USART_ISR_TXE));
+    USART2->TDR = (uint8_t)ptr[i];
   }
   return len;
 }

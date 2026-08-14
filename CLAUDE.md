@@ -110,7 +110,17 @@ Pictures/   board photos
 - [x] USB-A host bring-up on v0.2 — AnnePro2 enumerates as FS HID keyboard, class active 2026-08-12
   - PA8 configured as OTG_FS_SOF (AF10) test point; SOF/D+/D- signals confirmed on TP8/TP14/TP15
   - Plug keyboard after host init (not before) for reliable enumeration
-- [ ] USB-C device bring-up — OTG_HS FS PHY init confirmed; PB13 NC on v0.1 blocks D+ pull-up; v0.2 fixes with PB13→VBUS_DATA + VBDEN=1 firmware change
+- [x] UART2 debug logging on v0.2 — PA2/PA3 J7 header working 2026-08-13
+  - ISR-safe _write: direct USART2 TXE/TDR register writes (no HAL_GetTick dependency)
+  - setvbuf(stdout, NULL, _IONBF, 0) required to disable newlib-nano stdout buffering
+  - J7 connector is unpolarized — GND/TX/RX order must be verified (was plugged in backwards initially)
+  - Commit: 771b445
+- [x] USB-C device bring-up — enumerates as HS HID on PC 2026-08-13
+  - Root cause of D+=0V: cold solder joint on STM32 pin 57 (PB15/OTG_HS_DP); fix: reflow
+  - Config: USB_OTG_HS_EMBEDDED_PHY (OTGPHYC), PCD_SPEED_HIGH (DSPD=00, 480 Mbps)
+  - PC sees: idVendor=0483 idProduct=572b, "STM32 Human interface", new high-speed USB device
+  - Commit: e2db57c
+- [x] USB keyboard passthrough demo — USB-A host → STM32 → USB-C device, boot keyboard HID, confirmed working 2026-08-13 (commit bf10687)
 - [ ] MicroSD bring-up — abandoned on v0.1 (STBITERR, broken connector GND); retry on v0.2 with full-size SD connector
 - [ ] Port password manager demo from stm32f746-disc (Rust) to C
 
@@ -120,9 +130,10 @@ Pictures/   board photos
 - [x] PCB routed — 2026-07-21
 - [x] Fab / assemble
 - [x] USB-A host bring-up — AnnePro2 FS HID keyboard enumerated and active 2026-08-12
-- [ ] USB-C device bring-up (PB13 now connected to VBUS_DATA)
+- [x] UART2 debug logging — PA2/PA3 J7 header confirmed working 2026-08-13
+- [x] USB-C device bring-up — HS HID (480 Mbps) enumerating on PC 2026-08-13 (commit e2db57c)
 - [ ] MicroSD bring-up (full-size SD connector)
-- [ ] Firmware: enable VBDEN=1 for USB-C device (remove GOTGCTL bypass, use real VBUS comparator)
+- [ ] Firmware: change HID descriptor to keyboard + port password manager state machine
 
 ## DFU Notes
 
