@@ -19,9 +19,9 @@ Custom board bring-up and USB password manager demo in C.
 ## Flash Commands
 
 ```bash
-probe-rs download --chip STM32F723VETx --probe 1fc9:0090 ~/STM32F723_bringup/build/STM32F723_bringup.elf
+probe-rs download --chip STM32F723VETx --probe 1fc9:0090 ~/projects/stm32f723-USB-demo/bringup/build/STM32F723_bringup.elf
 probe-rs reset --chip STM32F723VETx --probe 1fc9:0090
-probe-rs attach --chip STM32F723VETx --probe 1fc9:0090 ~/STM32F723_bringup/build/STM32F723_bringup.elf  # RTT
+probe-rs attach --chip STM32F723VETx --probe 1fc9:0090 ~/projects/stm32f723-USB-demo/bringup/build/STM32F723_bringup.elf  # RTT
 ```
 
 ## Project Structure
