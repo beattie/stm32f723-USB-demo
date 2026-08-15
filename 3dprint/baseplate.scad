@@ -36,25 +36,58 @@ module standoff(x, y) {
     }
 }
 
-// Base plate
-cube([plate_w, plate_l, plate_thick]);
-
-// Display extension
-translate([plate_w - 0.1, plate_l - extension_l, 0]) {
-	cube([extension_w + 0.1, extension_l, plate_thick]);
-	translate([0, 0, plate_thick]) difference() {
-		union() {
-			translate([0, extension_l - display_t - 8, 0])
-					cube([4, display_t + 8, display_h + 3]);
-			translate([extension_w - 4,
-					extension_l - display_t - 8, 0])
-				cube([4, display_t + 8, display_h + 3]);
-		}
-		translate([2, extension_l - 9, 0])
-			cube([display_w+2, display_t + 0.5, display_h+5]);
+module keeper()
+{
+	difference() {
+		cube([extension_w + 8, display_t + 8 + 4, 5], center=true);
+		translate([extension_l - 4.5, 0, -2])
+			cube([4.5, display_t + 8.5, 2.5], center = true);
+		translate([-extension_l + 4.5, 0, -2])
+			cube([4.5, display_t + 8.5, 2.5], center = true);
+		translate([0, display_t + 1.5, -2])
+			cube([display_w - 3.25, 8, 2.5], center = true);
 	}
+	translate([0, -display_t - 2.5, -4])
+		cube([extension_w, 2, 7], center=true);
+	translate([extension_l - 1.5, 0, -4])
+		cube([1.5, 4, 6], center = true);
+	translate([-extension_l + 1.5, 0, -4])
+		cube([1.5, 4, 6], center = true);
 }
 
-// Standoffs at each mounting hole
-for (h = holes)
-    standoff(h[0], h[1]);
+module base_plate()
+{
+	// Base plate
+	cube([plate_w, plate_l, plate_thick]);
+
+	// Standoffs at each mounting hole
+	for (h = holes)
+    	standoff(h[0], h[1]);
+}
+
+module display()
+{
+	// Display extension
+	translate([plate_w - 0.1, plate_l - extension_l, 0]) {
+		cube([extension_w + 0.1, extension_l, plate_thick]);
+		translate([0, 0, plate_thick]) difference() {
+			union() {
+				translate([0, extension_l - display_t - 8, 0])
+						cube([5, display_t + 8, display_h + 3]);
+				translate([extension_w - 5,
+						extension_l - display_t - 8, 0])
+					cube([5, display_t + 8, display_h + 3]);
+			}
+			translate([2.5, extension_l - 9, 0])
+				cube([display_w+1, display_t + 0.5, display_h+5]);
+		}
+	}
+	%translate([extension_w/2 + plate_w ,
+			extension_l/2 + board_h - (display_t + 8)/2 - 5.7,
+			display_h + 7]) keeper();
+}
+
+base_plate();
+display();
+translate([board_w * 2, display_t*2, 2.5]) rotate([180, 0, 0]) keeper();
+
