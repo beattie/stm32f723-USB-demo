@@ -40,8 +40,13 @@ async fn main(_spawner: Spawner) {
 
     let p = embassy_stm32::init(config);
 
-    // PE9 = BLUE LED (active high)
-    let mut led = Output::new(p.PE9, Level::Low, Speed::Low);
+    // All LEDs off at init (active high; RGB red has enough leakage to glow if floating)
+    let mut led = Output::new(p.PE9,  Level::Low, Speed::Low); // BLUE
+    let _led_g  = Output::new(p.PE11, Level::Low, Speed::Low); // GREEN
+    let _led_y  = Output::new(p.PE13, Level::Low, Speed::Low); // YELLOW
+    let _rgb_r  = Output::new(p.PB4,  Level::Low, Speed::Low); // RGB RED
+    let _rgb_g  = Output::new(p.PB5,  Level::Low, Speed::Low); // RGB GREEN
+    let _rgb_b  = Output::new(p.PB6,  Level::Low, Speed::Low); // RGB BLUE
 
     info!("STM32F723 Embassy bringup — SYSCLK=216MHz");
 
