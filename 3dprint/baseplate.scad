@@ -11,6 +11,12 @@ standoff_h   = 4;
 pin_d        = 2;       // fits 2.2mm hole with 0.1mm clearance each side
 pin_h        = 2;
 
+display_w    = 30;
+display_h    = 43.5;
+display_t    = 5;
+extension_w  = 36;
+extension_l  = 20;
+
 plate_w = board_w + 2*margin;
 plate_l = board_h + 2*margin;
 
@@ -32,6 +38,22 @@ module standoff(x, y) {
 
 // Base plate
 cube([plate_w, plate_l, plate_thick]);
+
+// Display extension
+translate([plate_w - 0.1, plate_l - extension_l, 0]) {
+	cube([extension_w + 0.1, extension_l, plate_thick]);
+	translate([0, 0, plate_thick]) difference() {
+		union() {
+			translate([0, extension_l - display_t - 8, 0])
+					cube([4, display_t + 8, display_h + 3]);
+			translate([extension_w - 4,
+					extension_l - display_t - 8, 0])
+				cube([4, display_t + 8, display_h + 3]);
+		}
+		translate([2, extension_l - 9, 0])
+			cube([display_w+2, display_t + 0.5, display_h+5]);
+	}
+}
 
 // Standoffs at each mounting hole
 for (h = holes)
