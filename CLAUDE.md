@@ -137,15 +137,16 @@ Pictures/   board photos
 
 ## DFU Notes
 
-The STM32F723 ROM bootloader supports UART and USB DFU (per AN2606 Table 97):
+The STM32F723 ROM bootloader supports UART and USB DFU (per AN2606 Table 44 — STM32F72xxx/73xxx):
 
 **UART DFU (preferred):**
 - USART1 (PA9/PA10): conflicts — PA9=OTG_FS VBUS, PA10=OTG_FS_ID. Do not use.
-- USART3 (PB10/PB11): free on v0.2, **correct path**. Not broken out on v0.2 — add header on v0.3.
+- USART3 (PB10/PB11): free on v0.2, **correct path**. PB10/PB11 not broken out on v0.2.
 - USART3 alt pins (PC10/PC11): conflict with SD card. Do not use.
 - USART2 is NOT supported by the STM32F723 ROM bootloader.
 - Host tool: `stm32flash` (not dfu-util). Bootloader auto-detects baud via 0x7F sync byte.
-- v0.2 PA2/PA3 header (USART2) is useful for debug UART only, not ROM bootloader DFU.
+- v0.2 PA2/PA3 header (USART2) is debug UART only — not a bootloader UART.
+- **v0.3 plan**: replace PA2/PA3 USART2 debug header with PB10/PB11 USART3 header — one connector serves both debug and ROM bootloader DFU.
 
 **USB DFU:**
 - OTG_FS (PA11/PA12) ROM bootloader DFU: wired to USB-A host connector — requires PC connected there.
