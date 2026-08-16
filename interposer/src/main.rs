@@ -4,6 +4,8 @@
 use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
+
+use embassy_stm32::Peri;
 use embassy_stm32::gpio::{AfType, Flex, Level, Output, OutputType};
 // rename Speed to avoid clash with USB Speed:
 use embassy_stm32::gpio::Speed as GpioSpeed;
@@ -29,10 +31,22 @@ use embassy_usb_host::class::kbd::{KbdEvent, KbdHandler};
 use embassy_usb_host::handler::HandlerEvent;
 use embassy_usb_host::{BusController, BusHandle};
 
+use embassy_sync::signal::Signal;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+
 use embassy_time::Timer;
 use panic_probe as _;
 
 defmt::timestamp!("{=u64:us}", embassy_time::Instant::now().as_micros());
+
+#[derive(Clone, Copy)]
+enum LedCmd {
+    KeyboardConnected,
+    KeyboardDisconnected,
+    NotAKeyboard,
+}
+
+static LED_CMD: Signal<CriticalSectionRawMutex, LedCmd> = Signal::new();
 
 static HOST_STATE: HostState<8> = HostState::new();
 static BUS_STATE: BusState = BusState::new();
@@ -102,17 +116,13 @@ async fn main(spawner: Spawner) {
     unsafe { interrupt::typelevel::OTG_FS::enable(); }
     let (controller, handle) = bus(otg_host, &BUS_STATE);
 
-    spawner.spawn(kbd_task(controller, handle).unwrap());
+    spawner.spawn(led_task(p.PE9, p.PE11, p.PE13).unwrap());
+    spawner.spawn(kbd_task(controller, handle, p.PB0).unwrap());
 
     // All LEDs off at init (active high; RGB red has enough leakage to glow if floating)
-    let _led_b = Output::new(p.PE9,  Level::High, GpioSpeed::Low); // BLUE
-    let _led_g = Output::new(p.PE11, Level::Low , GpioSpeed::Low); // GREEN
-    let _led_y = Output::new(p.PE13, Level::Low , GpioSpeed::Low); // YELLOW
     let _rgb_r = Output::new(p.PB4,  Level::Low , GpioSpeed::Low); // RGB RED
     let _rgb_g = Output::new(p.PB5,  Level::Low , GpioSpeed::Low); // RGB GREEN
     let _rgb_b = Output::new(p.PB6,  Level::Low , GpioSpeed::Low); // RGB BLUE
-    // Enable USB-A VBUS
-    let _usba_en = Output::new(p.PB0, Level::High, GpioSpeed::Low);
 
     info!("STM32F723 Embassy bringup — SYSCLK=216MHz");
 
@@ -125,8 +135,13 @@ async fn main(spawner: Spawner) {
 async fn kbd_task(
     mut controller: BusController<'static, OtgHost<'static, 8>>,
     handle: BusHandle<'static, OtgHostAllocator<'static, 8>>,
+    vbus_ena: Peri<'static, embassy_stm32::peripherals::PB0>,
 ) {
+    // Enable USB-A VBUS
+    let _usba_en = Output::new(vbus_ena, Level::High, GpioSpeed::Low);
+
     loop {
+        LED_CMD.signal(LedCmd::KeyboardDisconnected);
         // wait for a keyboard to be plugged in
         let speed = controller.wait_for_connection().await;
         info!("USB device connected: {:?}", speed);
@@ -146,7 +161,7 @@ async fn kbd_task(
         let mut kbd = match KbdHandler::try_register(&handle, &enum_info).await {
             Ok(k) => k,
             Err(e) => {
-                // start flashing LED
+                LED_CMD.signal(LedCmd::NotAKeyboard);
                 info!("Not a keyboard: {:?}", e);
                 handle.free_address(enum_info.device_address);
                 continue;
@@ -154,7 +169,7 @@ async fn kbd_task(
         };
 
         info!("Keyboard ready");
-        // turnon LED
+        LED_CMD.signal(LedCmd::KeyboardConnected);
 
         // read events until disconnect
         loop {
@@ -171,6 +186,31 @@ async fn kbd_task(
                     handle.free_address(enum_info.device_address);
                     break;
                 }
+            }
+        }
+    }
+}
+
+#[embassy_executor::task]
+async fn led_task (
+    pin_b: Peri<'static, embassy_stm32::peripherals::PE9>,
+    pin_g: Peri<'static, embassy_stm32::peripherals::PE11>,
+    pin_y: Peri<'static, embassy_stm32::peripherals::PE13>,
+) {
+    let _led_b     = Output::new(pin_b,  Level::High, GpioSpeed::Low); // BLUE
+    let _led_g     = Output::new(pin_g, Level::Low , GpioSpeed::Low); // GREEN
+    let mut led_y  = Output::new(pin_y, Level::Low , GpioSpeed::Low); // YELLOW
+
+    loop {
+        match LED_CMD.wait().await {
+            LedCmd::KeyboardConnected => {
+                led_y.set_high();
+            }
+            LedCmd::KeyboardDisconnected => {
+                led_y.set_low();
+            }
+            LedCmd::NotAKeyboard => {
+                // blink yellow LED
             }
         }
     }
