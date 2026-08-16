@@ -1,6 +1,14 @@
 // STM32F723 USB Interposer board base plate
+// This is a Q&D hack to solve two problems,
+// since there is a connector on the bottom
+// the board tends to rock when probeing, the
+// display just tends to flop around and not
+// be visable. This fixes both, it is not
+// well fitted or elegant.
+//
 // Board: 40x80mm, 4x M2.2 mounting holes
-// Standoffs: 4mm dia, 4mm tall; pins: 2mm dia, 2mm tall (for 2mm screws / press fit)
+// Standoffs: 4mm dia, 4mm tall; pins: 2mm dia,
+// 2mm tall (for 2mm screws / press fit)
 
 board_w      = 40;
 board_h      = 80;
