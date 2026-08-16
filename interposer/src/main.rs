@@ -175,6 +175,62 @@ async fn kbd_task(
 
         // read events until disconnect
         loop {
+            match select(
+                controller.wait_for_device_event(),
+                kbd.wait_for_event(),
+            ).await {
+                Either::First(_) => {
+                    // port event (disconnect)
+                    info!("Keyboard disconnected");
+                    handle.free_address(enum_info.device_address);
+                    LED_CMD.signal(LedCmd::KeyboardDisconnected);
+                    break;
+                }
+                Either::Second(Ok(HandlerEvent::HandlerEvent(
+                            KbdEvent::KeyStatusUpdate(update)))) => {
+                    info!("mod={:08b} keys={:?}",
+                          update.modifiers, update.keypress);
+                }
+                Either::Second(Ok(_)) => {}
+                Either::Second(Err(e)) => {
+                    info!("Keyboard error: {:?}", e);
+                    handle.free_address(enum_info.device_address);
+                    LED_CMD.signal(LedCmd::KeyboardDisconnected);
+                    break;
+                }
+            }
+        }
+    }
+}
+/*
+loop {
+      match select(
+          controller.wait_for_device_event(),
+          kbd.wait_for_event(),
+      ).await {
+          Either::First(_) => {
+              // port event (disconnect)
+              info!("Keyboard disconnected");
+              handle.free_address(enum_info.device_address);
+              LED_CMD.signal(LedCmd::KeyboardDisconnected);
+              break;
+          }
+          Either::Second(Ok(HandlerEvent::HandlerEvent(
+                  KbdEvent::KeyStatusUpdate(update)))) => {
+              info!("mod={:08b} keys={:?}",
+                    update.modifiers, update.keypress);
+          }
+          Either::Second(Ok(_)) => {}
+          Either::Second(Err(e)) => {
+              info!("Keyboard error: {:?}", e);
+              handle.free_address(enum_info.device_address);
+              LED_CMD.signal(LedCmd::KeyboardDisconnected);
+              break;
+          }
+      }
+  }
+
+---------------------
             match kbd.wait_for_event().await {
                 Ok(HandlerEvent::HandlerEvent(KbdEvent::
                                               KeyStatusUpdate(update))) => {
@@ -183,7 +239,7 @@ async fn kbd_task(
                 }
                 Ok(_) => {}
                 Err(e) => {
-                    // turn off LED
+                    LED_CMD.signal(LedCmd::KeyboardDisconnected);
                     info!("Keyboard disconnected: {:?}", e);
                     handle.free_address(enum_info.device_address);
                     break;
@@ -192,6 +248,7 @@ async fn kbd_task(
         }
     }
 }
+*/
 
 #[embassy_executor::task]
 async fn led_task (
@@ -200,20 +257,25 @@ async fn led_task (
     pin_y: Peri<'static, embassy_stm32::peripherals::PE13>,
 ) {
     let _led_b     = Output::new(pin_b,  Level::High, GpioSpeed::Low); // BLUE
-    let mut led_g  = Output::new(pin_g, Level::Low , GpioSpeed::Low); // GREEN
+    let _led_g     = Output::new(pin_g, Level::Low , GpioSpeed::Low); // GREEN
     let mut led_y  = Output::new(pin_y, Level::Low , GpioSpeed::Low); // YELLOW
+
+    let mut yellow = 0u8;   // 0 = steady, nonzero = flashing
 
     loop {
         match select(LED_CMD.wait(), Timer::after_millis(500)).await {
             Either::First(cmd) => {
+                yellow = 0;     // clear flashing state on any new command
                 match cmd {
                     LedCmd::KeyboardConnected    => led_y.set_high(),
                     LedCmd::KeyboardDisconnected => led_y.set_low(),
-                    LedCmd::NotAKeyboard         => {},
+                    LedCmd::NotAKeyboard         => { yellow = 1; },
                 }
             }
             Either::Second(_) => {
-                led_g.toggle();
+                if yellow != 0 {
+                    led_y.toggle();
+                }
             }
         }
     }
