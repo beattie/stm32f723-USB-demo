@@ -6,6 +6,9 @@ edition = "2021"
 [dependencies]
 embassy-executor  = { version = "0.10", features = ["platform-cortex-m", "executor-thread"] }
 embassy-stm32     = { version = "0.6",  features = ["stm32f723ve", "time-driver-tim2", "unstable-pac"] }
+embassy-usb-host  = { version = "0.1",  features = ["defmt"] }
+embassy-usb-synopsys-otg = { version = "0.3", features = ["host", "defmt"] }
+embassy-usb-driver = { version = "0.2" }
 embassy-time      = { version = "0.5",  features = ["tick-hz-32_768"] }
 embassy-sync      = { version = "0.8" }
 

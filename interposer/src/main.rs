@@ -4,20 +4,54 @@
 use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
-use embassy_stm32::gpio::{Level, Output, Speed};
+use embassy_stm32::gpio::{AfType, Flex, Level, Output, OutputType};
+// rename Speed to avoid clash with USB Speed:
+use embassy_stm32::gpio::Speed as GpioSpeed;
+use embassy_stm32::{interrupt, pac};
+use embassy_stm32::bind_interrupts;
+use embassy_stm32::interrupt::typelevel::Handler;
+use embassy_stm32::interrupt::typelevel::Interrupt;
 use embassy_stm32::rcc::{
-    AHBPrescaler, APBPrescaler, Hse, HseMode, Pll, PllMul, PllPDiv, PllPreDiv, PllQDiv,
-    PllSource, Sysclk,
+    AHBPrescaler, APBPrescaler, Hse, HseMode, Pll, PllMul, PllPDiv,
+    PllPreDiv, PllQDiv, PllSource, Sysclk,
 };
 use embassy_stm32::time::Hertz;
 use embassy_stm32::Config;
+
+use embassy_usb_synopsys_otg::{PhyType, otg_v1::Otg};
+use embassy_usb_synopsys_otg::host::{
+    HostState, OtgHost, OtgHostInstance, on_host_interrupt
+};
+use embassy_usb_synopsys_otg::host::OtgHostAllocator;
+
+use embassy_usb_host::{BusState, BusRoute, bus};
+use embassy_usb_host::class::kbd::{KbdEvent, KbdHandler};
+use embassy_usb_host::handler::HandlerEvent;
+use embassy_usb_host::{BusController, BusHandle};
+
 use embassy_time::Timer;
 use panic_probe as _;
 
 defmt::timestamp!("{=u64:us}", embassy_time::Instant::now().as_micros());
 
+static HOST_STATE: HostState<8> = HostState::new();
+static BUS_STATE: BusState = BusState::new();
+
+struct OtgFsHostIrq;
+
+impl Handler<interrupt::typelevel::OTG_FS> for OtgFsHostIrq {
+    unsafe fn on_interrupt() {
+        let r = unsafe { Otg::from_ptr(pac::USB_OTG_FS.as_ptr() as *mut ()) };
+        on_host_interrupt(r, &HOST_STATE, 8);
+    }
+}
+
+bind_interrupts!(struct Irqs {
+    OTG_FS => OtgFsHostIrq;
+});
+
 #[embassy_executor::main]
-async fn main(_spawner: Spawner) {
+async fn main(spawner: Spawner) {
     // 25 MHz HSE → SYSCLK=216 MHz, APB1=54 MHz, APB2=108 MHz, PLLQ=48 MHz (USB)
     let mut config = Config::default();
     config.rcc.hse = Some(Hse {
@@ -40,21 +74,104 @@ async fn main(_spawner: Spawner) {
 
     let p = embassy_stm32::init(config);
 
+    let _dm = {
+        let mut pin = Flex::new(p.PA11);
+        pin.set_as_af_unchecked(10, AfType::output(OutputType::PushPull,
+                                                   GpioSpeed::VeryHigh));
+        pin
+    };
+
+    let _dp = {
+        let mut pin = Flex::new(p.PA12);
+        pin.set_as_af_unchecked(10, AfType::output(OutputType::PushPull,
+                                                   GpioSpeed::VeryHigh));
+        pin
+    };
+
+    pac::RCC.ahb2enr().modify(|w| w.set_usb_otg_fsen(true));
+
+    let instance = OtgHostInstance {
+        regs: unsafe { Otg::from_ptr(pac::USB_OTG_FS.as_ptr() as *mut ()) },
+        state: &HOST_STATE,
+        fifo_depth_words: 320,
+        channel_count: 8,
+        phy_type: PhyType::InternalFullSpeed,
+    };
+
+    let otg_host = OtgHost::new(instance);
+    unsafe { interrupt::typelevel::OTG_FS::enable(); }
+    let (controller, handle) = bus(otg_host, &BUS_STATE);
+
+    spawner.spawn(kbd_task(controller, handle).unwrap());
+
     // All LEDs off at init (active high; RGB red has enough leakage to glow if floating)
-    let mut led = Output::new(p.PE9,  Level::Low, Speed::Low); // BLUE
-    let _led_g  = Output::new(p.PE11, Level::Low, Speed::Low); // GREEN
-    let _led_y  = Output::new(p.PE13, Level::Low, Speed::Low); // YELLOW
-    let _rgb_r  = Output::new(p.PB4,  Level::Low, Speed::Low); // RGB RED
-    let _rgb_g  = Output::new(p.PB5,  Level::Low, Speed::Low); // RGB GREEN
-    let _rgb_b  = Output::new(p.PB6,  Level::Low, Speed::Low); // RGB BLUE
+    let _led_b = Output::new(p.PE9,  Level::High, GpioSpeed::Low); // BLUE
+    let _led_g = Output::new(p.PE11, Level::Low , GpioSpeed::Low); // GREEN
+    let _led_y = Output::new(p.PE13, Level::Low , GpioSpeed::Low); // YELLOW
+    let _rgb_r = Output::new(p.PB4,  Level::Low , GpioSpeed::Low); // RGB RED
+    let _rgb_g = Output::new(p.PB5,  Level::Low , GpioSpeed::Low); // RGB GREEN
+    let _rgb_b = Output::new(p.PB6,  Level::Low , GpioSpeed::Low); // RGB BLUE
+    // Enable USB-A VBUS
+    let _usba_en = Output::new(p.PB0, Level::High, GpioSpeed::Low);
 
     info!("STM32F723 Embassy bringup — SYSCLK=216MHz");
 
     loop {
-        led.set_high();
-        Timer::after_millis(500).await;
-        led.set_low();
-        Timer::after_millis(500).await;
-        info!("blink");
+        Timer::after_millis(1000).await;
+    }
+}
+
+#[embassy_executor::task]
+async fn kbd_task(
+    mut controller: BusController<'static, OtgHost<'static, 8>>,
+    handle: BusHandle<'static, OtgHostAllocator<'static, 8>>,
+) {
+    loop {
+        // wait for a keyboard to be plugged in
+        let speed = controller.wait_for_connection().await;
+        info!("USB device connected: {:?}", speed);
+
+        // enumerate the device
+        let mut config_buf = [0u8; 256];
+        let (enum_info, _) = match handle.enumerate(BusRoute::Direct(speed),
+                                                    &mut config_buf).await {
+            Ok(v) => v,
+            Err(e) => {
+                info!("Enumeration failed: {:?}", e);
+                continue;
+            }
+        };
+
+        // try to claim it as a boot keyboard
+        let mut kbd = match KbdHandler::try_register(&handle, &enum_info).await {
+            Ok(k) => k,
+            Err(e) => {
+                // start flashing LED
+                info!("Not a keyboard: {:?}", e);
+                handle.free_address(enum_info.device_address);
+                continue;
+            }
+        };
+
+        info!("Keyboard ready");
+        // turnon LED
+
+        // read events until disconnect
+        loop {
+            match kbd.wait_for_event().await {
+                Ok(HandlerEvent::HandlerEvent(KbdEvent::
+                                              KeyStatusUpdate(update))) => {
+                    info!("mod={:08b} keys={:?}",
+                          update.modifiers, update.keypress);
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    // turn off LED
+                    info!("Keyboard disconnected: {:?}", e);
+                    handle.free_address(enum_info.device_address);
+                    break;
+                }
+            }
+        }
     }
 }
