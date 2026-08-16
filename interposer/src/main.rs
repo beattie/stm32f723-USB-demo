@@ -4,6 +4,7 @@
 use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
+use core::sync::atomic::{AtomicU8, Ordering};
 
 use embassy_futures::select::{select, Either};
 
@@ -11,6 +12,7 @@ use embassy_stm32::Peri;
 use embassy_stm32::gpio::{AfType, Flex, Level, Output, OutputType};
 // rename Speed to avoid clash with USB Speed:
 use embassy_stm32::gpio::Speed as GpioSpeed;
+use embassy_stm32::gpio::{Input, Pull};
 use embassy_stm32::{interrupt, pac};
 use embassy_stm32::bind_interrupts;
 use embassy_stm32::interrupt::typelevel::Handler;
@@ -40,6 +42,8 @@ use embassy_time::Timer;
 use panic_probe as _;
 
 defmt::timestamp!("{=u64:us}", embassy_time::Instant::now().as_micros());
+
+static HW_VERSION: AtomicU8 = AtomicU8::new(0);
 
 #[derive(Clone, Copy)]
 enum LedCmd {
@@ -90,6 +94,10 @@ async fn main(spawner: Spawner) {
 
     let p = embassy_stm32::init(config);
 
+    let version = hw_version(p.PD4, p.PD5, p.PD6, p.PD7);
+    HW_VERSION.store(version, Ordering::Relaxed);
+    info!("Interposer version: {}", version + 1);
+
     let _dm = {
         let mut pin = Flex::new(p.PA11);
         pin.set_as_af_unchecked(10, AfType::output(OutputType::PushPull,
@@ -132,6 +140,19 @@ async fn main(spawner: Spawner) {
         Timer::after_millis(1000).await;
     }
 }
+
+fn hw_version(
+    pd4: Peri<'static, embassy_stm32::peripherals::PD4>,
+    pd5: Peri<'static, embassy_stm32::peripherals::PD5>,
+    pd6: Peri<'static, embassy_stm32::peripherals::PD6>,
+    pd7: Peri<'static, embassy_stm32::peripherals::PD7>,
+) -> u8 {
+    Input::new(pd4, Pull::Up).is_high() as u8 |
+       ((Input::new(pd5, Pull::Up).is_high() as u8) << 1) |
+       ((Input::new(pd6, Pull::Up).is_high() as u8) << 2) |
+       ((Input::new(pd7, Pull::Up).is_high() as u8) << 3)
+}
+    
 
 #[embassy_executor::task]
 async fn kbd_task(
@@ -202,53 +223,6 @@ async fn kbd_task(
         }
     }
 }
-/*
-loop {
-      match select(
-          controller.wait_for_device_event(),
-          kbd.wait_for_event(),
-      ).await {
-          Either::First(_) => {
-              // port event (disconnect)
-              info!("Keyboard disconnected");
-              handle.free_address(enum_info.device_address);
-              LED_CMD.signal(LedCmd::KeyboardDisconnected);
-              break;
-          }
-          Either::Second(Ok(HandlerEvent::HandlerEvent(
-                  KbdEvent::KeyStatusUpdate(update)))) => {
-              info!("mod={:08b} keys={:?}",
-                    update.modifiers, update.keypress);
-          }
-          Either::Second(Ok(_)) => {}
-          Either::Second(Err(e)) => {
-              info!("Keyboard error: {:?}", e);
-              handle.free_address(enum_info.device_address);
-              LED_CMD.signal(LedCmd::KeyboardDisconnected);
-              break;
-          }
-      }
-  }
-
----------------------
-            match kbd.wait_for_event().await {
-                Ok(HandlerEvent::HandlerEvent(KbdEvent::
-                                              KeyStatusUpdate(update))) => {
-                    info!("mod={:08b} keys={:?}",
-                          update.modifiers, update.keypress);
-                }
-                Ok(_) => {}
-                Err(e) => {
-                    LED_CMD.signal(LedCmd::KeyboardDisconnected);
-                    info!("Keyboard disconnected: {:?}", e);
-                    handle.free_address(enum_info.device_address);
-                    break;
-                }
-            }
-        }
-    }
-}
-*/
 
 #[embassy_executor::task]
 async fn led_task (
