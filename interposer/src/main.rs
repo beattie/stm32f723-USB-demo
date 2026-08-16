@@ -5,6 +5,8 @@ use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
 
+use embassy_futures::select::{select, Either};
+
 use embassy_stm32::Peri;
 use embassy_stm32::gpio::{AfType, Flex, Level, Output, OutputType};
 // rename Speed to avoid clash with USB Speed:
@@ -198,19 +200,20 @@ async fn led_task (
     pin_y: Peri<'static, embassy_stm32::peripherals::PE13>,
 ) {
     let _led_b     = Output::new(pin_b,  Level::High, GpioSpeed::Low); // BLUE
-    let _led_g     = Output::new(pin_g, Level::Low , GpioSpeed::Low); // GREEN
+    let mut led_g  = Output::new(pin_g, Level::Low , GpioSpeed::Low); // GREEN
     let mut led_y  = Output::new(pin_y, Level::Low , GpioSpeed::Low); // YELLOW
 
     loop {
-        match LED_CMD.wait().await {
-            LedCmd::KeyboardConnected => {
-                led_y.set_high();
+        match select(LED_CMD.wait(), Timer::after_millis(500)).await {
+            Either::First(cmd) => {
+                match cmd {
+                    LedCmd::KeyboardConnected    => led_y.set_high(),
+                    LedCmd::KeyboardDisconnected => led_y.set_low(),
+                    LedCmd::NotAKeyboard         => {},
+                }
             }
-            LedCmd::KeyboardDisconnected => {
-                led_y.set_low();
-            }
-            LedCmd::NotAKeyboard => {
-                // blink yellow LED
+            Either::Second(_) => {
+                led_g.toggle();
             }
         }
     }
