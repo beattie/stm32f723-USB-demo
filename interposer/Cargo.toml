@@ -7,17 +7,24 @@ edition = "2021"
 embassy-futures = { version = "0.1" }
 embassy-executor  = { version = "0.10", features = ["platform-cortex-m", "executor-thread"] }
 embassy-stm32     = { version = "0.6",  features = ["stm32f723ve", "time-driver-tim2", "unstable-pac"] }
+embassy-usb = { version = "0.6", features = ["defmt"] }
 embassy-usb-host  = { version = "0.1",  features = ["defmt"] }
 embassy-usb-synopsys-otg = { version = "0.3", features = ["host", "defmt"] }
 embassy-usb-driver = { version = "0.2" }
 embassy-time      = { version = "0.5",  features = ["tick-hz-32_768"] }
 embassy-sync      = { version = "0.8" }
 
+static_cell = { version = "2" }
+
 cortex-m         = { version = "0.7", features = ["inline-asm", "critical-section-single-core"] }
 cortex-m-rt      = "0.7"
 defmt            = "0.3"
 defmt-rtt        = "0.4"
 panic-probe      = { version = "0.3", features = ["print-defmt"] }
+
+[patch.crates-io]
+# Fix: STM32F723 OTGPHYC (InternalHighSpeed) needs ULPI AHB clock even in internal mode
+embassy-stm32 = { path = "../embassy-stm32-patched" }
 
 [profile.dev]
 debug = 2

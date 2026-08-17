@@ -24,9 +24,23 @@ use embassy_stm32::rcc::{
 use embassy_stm32::time::Hertz;
 use embassy_stm32::Config;
 
+use embassy_stm32::usb::InterruptHandler as UsbInterruptHandler;
+use embassy_stm32::usb::Driver as UsbDriver;
+
+use embassy_usb::class::hid::{
+    HidWriter,
+    HidSubclass,
+    HidBootProtocol,
+    Config as HidConfig,
+    State as HidState,
+};
+
 use embassy_usb_synopsys_otg::{PhyType, otg_v1::Otg};
 use embassy_usb_synopsys_otg::host::{
-    HostState, OtgHost, OtgHostInstance, on_host_interrupt
+    HostState,
+    OtgHost,
+    OtgHostInstance,
+    on_host_interrupt,
 };
 use embassy_usb_synopsys_otg::host::OtgHostAllocator;
 
@@ -38,10 +52,14 @@ use embassy_usb_host::{BusController, BusHandle};
 use embassy_sync::signal::Signal;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 
+use static_cell::StaticCell;
+
 use embassy_time::Timer;
 use panic_probe as _;
 
 defmt::timestamp!("{=u64:us}", embassy_time::Instant::now().as_micros());
+
+type HsDriver = UsbDriver<'static, embassy_stm32::peripherals::USB_OTG_HS>;
 
 static HW_VERSION: AtomicU8 = AtomicU8::new(0);
 
@@ -57,6 +75,39 @@ static LED_CMD: Signal<CriticalSectionRawMutex, LedCmd> = Signal::new();
 static HOST_STATE: HostState<8> = HostState::new();
 static BUS_STATE: BusState = BusState::new();
 
+static EP_OUT_BUF:      StaticCell<[u8; 256]>   = StaticCell::new();
+static DEV_DESC:        StaticCell<[u8; 256]>   = StaticCell::new();
+static CONF_DESC:       StaticCell<[u8; 256]>   = StaticCell::new();
+static BOS_DESC:        StaticCell<[u8; 64]>    = StaticCell::new();
+static MSOS_DESC:       StaticCell<[u8; 64]>    = StaticCell::new();
+static HID_STATE:       StaticCell<HidState>    = StaticCell::new();
+
+static HID_KEYBOARD_REPORT_DESC: &[u8] = &[
+    0x05, 0x01,  // Usage Page (Generic Desktop)
+    0x09, 0x06,  // Usage (Keyboard)
+    0xA1, 0x01,  // Collection (Application)
+    0x05, 0x07,  //   Usage Page (Key Codes)
+    0x19, 0xE0,  //   Usage Minimum (224) — modifier keys
+    0x29, 0xE7,  //   Usage Maximum (231)
+    0x15, 0x00,  //   Logical Minimum (0)
+    0x25, 0x01,  //   Logical Maximum (1)
+    0x75, 0x01,  //   Report Size (1 bit)
+    0x95, 0x08,  //   Report Count (8) — 8 modifier bits
+    0x81, 0x02,  //   Input (Data, Variable, Absolute)
+    0x95, 0x01,  //   Report Count (1)
+    0x75, 0x08,  //   Report Size (8 bits) — reserved byte
+    0x81, 0x01,  //   Input (Constant)
+    0x95, 0x06,  //   Report Count (6)
+    0x75, 0x08,  //   Report Size (8 bits) — 6 keycodes
+    0x15, 0x00,  //   Logical Minimum (0)
+    0x25, 0x65,  //   Logical Maximum (101)
+    0x05, 0x07,  //   Usage Page (Key Codes)
+    0x19, 0x00,  //   Usage Minimum (0)
+    0x29, 0x65,  //   Usage Maximum (101)
+    0x81, 0x00,  //   Input (Data, Array)
+    0xC0,        // End Collection
+];
+
 struct OtgFsHostIrq;
 
 impl Handler<interrupt::typelevel::OTG_FS> for OtgFsHostIrq {
@@ -68,6 +119,7 @@ impl Handler<interrupt::typelevel::OTG_FS> for OtgFsHostIrq {
 
 bind_interrupts!(struct Irqs {
     OTG_FS => OtgFsHostIrq;
+    OTG_HS => UsbInterruptHandler<embassy_stm32::peripherals::USB_OTG_HS>;
 });
 
 #[embassy_executor::main]
@@ -98,6 +150,44 @@ async fn main(spawner: Spawner) {
     HW_VERSION.store(version, Ordering::Relaxed);
     info!("Interposer version: {}", version + 1);
 
+    let mut usb_dev_config = embassy_usb::Config::new(0x0483, 0x5741);
+    usb_dev_config.manufacturer = Some("Acme Electronics");
+    usb_dev_config.product = Some("Interposer");
+    usb_dev_config.serial_number = Some("0001");
+    usb_dev_config.max_power = 100;
+    usb_dev_config.max_packet_size_0 = 64;
+
+    let mut usb_config = embassy_stm32::usb::Config::default();
+    usb_config.vbus_detection = false;
+
+    let driver = UsbDriver::new_hs(
+        p.USB_OTG_HS, Irqs,
+        p.PB15, p.PB14, // DP, DM
+        EP_OUT_BUF.init([0u8; 256]),
+        usb_config,
+    );
+
+    let mut builder = embassy_usb::Builder::new(
+        driver,
+        usb_dev_config,
+        DEV_DESC.init([0u8; 256]),
+        CONF_DESC.init([0u8; 256]),
+        BOS_DESC.init([0u8; 64]),
+        MSOS_DESC.init([0u8; 64]),
+    );
+
+    let hid_config = HidConfig {
+        report_descriptor: HID_KEYBOARD_REPORT_DESC,
+        request_handler: None,
+        poll_ms: 10,
+        max_packet_size: 8,
+        hid_subclass: HidSubclass::Boot,
+        hid_boot_protocol: HidBootProtocol::Keyboard,
+    };
+    let hid_state = HID_STATE.init(HidState::new());
+    let hid_writer = HidWriter::<_, 8>::new(&mut builder, hid_state, hid_config);
+    let usb_device = builder.build();
+
     let _dm = {
         let mut pin = Flex::new(p.PA11);
         pin.set_as_af_unchecked(10, AfType::output(OutputType::PushPull,
@@ -126,8 +216,15 @@ async fn main(spawner: Spawner) {
     unsafe { interrupt::typelevel::OTG_FS::enable(); }
     let (controller, handle) = bus(otg_host, &BUS_STATE);
 
+    // needed even for internal OTGPHYC
+    pac::RCC.ahb1enr().modify(|w| w.set_usb_otg_hsulpien(true));
+    // OTGPHYC clock for OTG_HS HS PHY
+    pac::RCC.apb2enr().modify(|w| w.set_usbphycen(true));
+    unsafe { init_otgphyc(); }
+    spawner.spawn(usb_task(usb_device).unwrap());
+
     spawner.spawn(led_task(p.PE9, p.PE11, p.PE13).unwrap());
-    spawner.spawn(kbd_task(controller, handle, p.PB0).unwrap());
+    spawner.spawn(kbd_task(controller, handle, p.PB0, hid_writer).unwrap());
 
     // All LEDs off at init (active high; RGB red has enough leakage to glow if floating)
     let _rgb_r = Output::new(p.PB4,  Level::Low , GpioSpeed::Low); // RGB RED
@@ -159,6 +256,7 @@ async fn kbd_task(
     mut controller: BusController<'static, OtgHost<'static, 8>>,
     handle: BusHandle<'static, OtgHostAllocator<'static, 8>>,
     vbus_ena: Peri<'static, embassy_stm32::peripherals::PB0>,
+    mut hid: HidWriter<'static, HsDriver, 8>,
 ) {
     // Enable USB-A VBUS
     let _usba_en = Output::new(vbus_ena, Level::High, GpioSpeed::Low);
@@ -211,6 +309,12 @@ async fn kbd_task(
                             KbdEvent::KeyStatusUpdate(update)))) => {
                     info!("mod={:08b} keys={:?}",
                           update.modifiers, update.keypress);
+                    let mut report = [0u8; 8];
+                    report[0] = update.modifiers;
+                    for (i, k) in update.keypress.iter().enumerate() {
+                        report[2 + i] = k.map_or(0, |v| v.get());
+                    }
+                    let _ = hid.write(&report).await;
                 }
                 Either::Second(Ok(_)) => {}
                 Either::Second(Err(e)) => {
@@ -222,6 +326,36 @@ async fn kbd_task(
             }
         }
     }
+}
+
+unsafe fn init_otgphyc() {
+    const PHYC: *mut u32 = 0x4001_7C00 as *mut u32;
+    // offsets in u32 words: PLL=0x00, TUNE=0x0C, LDO=0x18
+    let pll  = PHYC.add(0x00 / 4);
+    let tune = PHYC.add(0x0C / 4);
+    let ldo  = PHYC.add(0x18 / 4);
+
+    // Enable LDO (set bit 2), wait for LDO ready (bit 1)
+    ldo.write_volatile(ldo.read_volatile() | (1 << 2));
+    while ldo.read_volatile() & (1 << 1) == 0 {}
+
+    // Select 25 MHz reference: PLLSEL=5 → bits [3:1] = 0b101
+    pll.write_volatile(0x5 << 1);
+
+    // Apply tuning value (from STM32F7 HAL: USB_HS_PHYC_TUNE_VALUE)
+    tune.write_volatile(tune.read_volatile() | 0x0000_0F13);
+
+    // Enable PLL (bit 0)
+    pll.write_volatile(pll.read_volatile() | 1);
+
+    // 2ms settle time — embassy_time::block_for is fine here (pre-scheduler)
+    embassy_time::block_for(embassy_time::Duration::from_millis(2));
+}
+
+#[embassy_executor::task]
+async fn usb_task(mut device: embassy_usb::UsbDevice<'static, HsDriver>) {
+    info!("USB device task started");
+    device.run().await;
 }
 
 #[embassy_executor::task]
