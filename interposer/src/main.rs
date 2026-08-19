@@ -23,6 +23,8 @@ use embassy_stm32::rcc::{
 };
 use embassy_stm32::time::Hertz;
 use embassy_stm32::Config;
+use embassy_stm32::sdmmc::{Sdmmc, Config as SdmmcConfig};
+use embassy_stm32::sdmmc::sd::{StorageDevice, CmdBlock, Addressable};
 
 use embassy_stm32::usb::InterruptHandler as UsbInterruptHandler;
 use embassy_stm32::usb::Driver as UsbDriver;
@@ -55,6 +57,24 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use static_cell::StaticCell;
 
 use embassy_time::Timer;
+
+use block_device_driver::{BlockDevice};
+
+use mipidsi::interface::SpiInterface;   // Provides builder for DisplayInterface
+use mipidsi::{Builder,                  // Provides builder for Display
+    options::ColorOrder,
+    models::ST7735s
+};
+use embedded_graphics::{prelude::*, pixelcolor::Rgb565};    // Color type
+use embedded_graphics::{
+    mono_font::{ascii::FONT_5X8, MonoTextStyle},
+    text::Text,
+};
+use heapless::String;
+use core::fmt::Write;
+
+use aligned::{Aligned, A4};
+
 use panic_probe as _;
 
 defmt::timestamp!("{=u64:us}", embassy_time::Instant::now().as_micros());
@@ -120,6 +140,10 @@ impl Handler<interrupt::typelevel::OTG_FS> for OtgFsHostIrq {
 bind_interrupts!(struct Irqs {
     OTG_FS => OtgFsHostIrq;
     OTG_HS => UsbInterruptHandler<embassy_stm32::peripherals::USB_OTG_HS>;
+    SDMMC1 => embassy_stm32::sdmmc::InterruptHandler<
+            embassy_stm32::peripherals::SDMMC1>;
+    DMA2_STREAM3 => embassy_stm32::dma::InterruptHandler<
+            embassy_stm32::peripherals::DMA2_CH3>;
 });
 
 #[embassy_executor::main]
@@ -146,9 +170,16 @@ async fn main(spawner: Spawner) {
 
     let p = embassy_stm32::init(config);
 
-    let version = hw_version(p.PD4, p.PD5, p.PD6, p.PD7);
+    // All LEDs off at init (active high; RGB red has enough leakage to glow if floating)
+    let _rgb_r = Output::new(p.PB4,  Level::Low , GpioSpeed::Low); // RGB RED
+    let _rgb_g = Output::new(p.PB5,  Level::Low , GpioSpeed::Low); // RGB GREEN
+    let _rgb_b = Output::new(p.PB6,  Level::Low , GpioSpeed::Low); // RGB BLUE
+
+    info!("STM32F723 Embassy bringup — SYSCLK=216MHz");
+
+    let version = hw_version(p.PD4, p.PD5, p.PD6, p.PD7) + 1;
     HW_VERSION.store(version, Ordering::Relaxed);
-    info!("Interposer version: {}", version + 1);
+    info!("Interposer version: {}", version);
 
     let mut usb_dev_config = embassy_usb::Config::new(0x0483, 0x5741);
     usb_dev_config.manufacturer = Some("Acme Electronics");
@@ -224,14 +255,15 @@ async fn main(spawner: Spawner) {
     spawner.spawn(usb_task(usb_device).unwrap());
 
     spawner.spawn(led_task(p.PE9, p.PE11, p.PE13).unwrap());
+    spawner.spawn(display_task(p.SPI1, p.PA5, p.PA7, p.PA4, p.PB1, p.PA1,
+                               p.PA15).unwrap());
     spawner.spawn(kbd_task(controller, handle, p.PB0, hid_writer).unwrap());
 
-    // All LEDs off at init (active high; RGB red has enough leakage to glow if floating)
-    let _rgb_r = Output::new(p.PB4,  Level::Low , GpioSpeed::Low); // RGB RED
-    let _rgb_g = Output::new(p.PB5,  Level::Low , GpioSpeed::Low); // RGB GREEN
-    let _rgb_b = Output::new(p.PB6,  Level::Low , GpioSpeed::Low); // RGB BLUE
-
-    info!("STM32F723 Embassy bringup — SYSCLK=216MHz");
+    spawner.spawn(sd_task(
+            p.SDMMC1, p.DMA2_CH3,
+            p.PC12, p.PD2,
+            p.PC8, p.PC9, p.PC10, p.PC11,
+    ).unwrap());
 
     loop {
         Timer::after_millis(1000).await;
@@ -387,4 +419,128 @@ async fn led_task (
             }
         }
     }
+}
+
+#[embassy_executor::task]
+async fn sd_task(
+    sdmmc:  Peri<'static, embassy_stm32::peripherals::SDMMC1>,
+    dma:    Peri<'static, embassy_stm32::peripherals::DMA2_CH3>,
+    clk:    Peri<'static, embassy_stm32::peripherals::PC12>,
+    cmd:    Peri<'static, embassy_stm32::peripherals::PD2>,
+    d0:     Peri<'static, embassy_stm32::peripherals::PC8>,
+    _d1:     Peri<'static, embassy_stm32::peripherals::PC9>,
+    _d2:     Peri<'static, embassy_stm32::peripherals::PC10>,
+    _d3:     Peri<'static, embassy_stm32::peripherals::PC11>,
+) {
+    info!("SD task started");
+
+#[cfg(feature = "gpio-test")]
+{
+   // validate conectivity
+   let mut pin_clk = Output::new(clk, Level::Low, GpioSpeed::VeryHigh);
+   let mut pin_cmd = Output::new(cmd, Level::Low, GpioSpeed::VeryHigh);
+   let mut pin_d0  = Output::new(d0,  Level::Low, GpioSpeed::VeryHigh);
+   let mut pin_d1  = Output::new(d1,  Level::Low, GpioSpeed::VeryHigh);
+   let mut pin_d2  = Output::new(d2,  Level::Low, GpioSpeed::VeryHigh);
+   let mut pin_d3  = Output::new(d3,  Level::Low, GpioSpeed::VeryHigh);
+
+   loop {
+       pin_clk.toggle();
+       pin_cmd.toggle();
+       pin_d0.toggle();
+       pin_d1.toggle();
+       pin_d2.toggle();
+       pin_d3.toggle();
+       // embassy_time::Timer::after_secs(1).await;
+       cortex_m::asm::delay(270); // ~1.25 μs at 216 MHz → ~400 kHz
+   }
+} // End of gpio-test
+#[cfg(feature = "sdmmc_1bit")]
+    let mut sd = Sdmmc::new_1bit(
+        sdmmc, dma, Irqs, clk, cmd, d0,
+        SdmmcConfig::default(),
+    );
+#[cfg(feature = "sdmmc_4bit")]
+    let mut sd = Sdmmc::new_4bit(
+        sdmmc, dma, Irqs, clk, cmd, d0, d1, d2, d3,
+        SdmmcConfig::default(),
+    );
+
+    let mut cmd_block = CmdBlock::new();
+    embassy_time::Timer::after_millis(500).await;
+    loop {
+        match StorageDevice::new_sd_card(&mut sd, &mut cmd_block,
+                                         Hertz(400_000)).await {
+            Ok(mut dev) => {
+                info!("SD card: {}MB", dev.card().size() / 1_000_000);
+                // 512 bytes, one SD block
+                let mut buf: Aligned<A4, [u8; 512]> = Aligned([0u8; 512]);
+                loop {
+                    dev.read(0, core::slice::from_mut(&mut buf)).await.ok();
+                    embassy_time::Timer::after_millis(1000).await;
+                }
+                //break;
+            }
+            Err(e) => {
+                info!("SD init failed: {:?}", e);
+                embassy_time::Timer::after_millis(1000).await;
+            }
+        }
+    }
+/*
+    loop {
+        embassy_time::Timer::after_secs(60).await;
+    }
+*/
+}
+
+#[embassy_executor::task]
+async fn display_task(
+    spi1: Peri<'static, embassy_stm32::peripherals::SPI1>,
+    pa5:  Peri<'static, embassy_stm32::peripherals::PA5>,   // SCK
+    pa7:  Peri<'static, embassy_stm32::peripherals::PA7>,   // MOSI
+    pa4:  Peri<'static, embassy_stm32::peripherals::PA4>,   // CS
+    pb1:  Peri<'static, embassy_stm32::peripherals::PB1>,   // DC
+    pa1:  Peri<'static, embassy_stm32::peripherals::PA1>,   // RST
+    pa15: Peri<'static, embassy_stm32::peripherals::PA15>,  // backlight
+) {
+    info!("Display Task started");
+    let mut spi_config = embassy_stm32::spi::Config::default();
+    spi_config.frequency = Hertz(12_000_000);
+    let spi = embassy_stm32::spi::Spi::new_blocking_txonly(spi1, pa5, pa7,
+                                                           spi_config);
+    let dc  = Output::new(pb1, Level::High, GpioSpeed::Low);
+    let rst = Output::new(pa1, Level::Low,  GpioSpeed::Low);
+    let cs  = Output::new(pa4, Level::High, GpioSpeed::High);
+    let _bl = Output::new(pa15,Level::High, GpioSpeed::Low);
+    let spi_dev = embedded_hal_bus::spi::ExclusiveDevice::
+                new_no_delay(spi, cs).unwrap();
+
+    let mut buffer = [0u8; 512];
+
+    let di = SpiInterface::new(spi_dev, dc, &mut buffer);
+
+    let mut display = Builder::new(ST7735s, di)
+        .reset_pin(rst)
+        .color_order(ColorOrder::Bgr)
+        .display_size(128, 128)
+        .init(&mut embassy_time::Delay).unwrap();
+
+    display.clear(Rgb565::BLACK).unwrap();
+
+    // Create a new character style
+    let style = MonoTextStyle::new(&FONT_5X8, Rgb565::WHITE);
+
+    let mut buf: String<25> = String::new();
+
+    write!(&mut buf, "Interposer HW ver = {}",
+           HW_VERSION.load(Ordering::Relaxed)).unwrap();
+    
+    // Create a text at position (0,0) and draw it using the previously
+    // defined style
+    Text::new(&buf, Point::new(5,8), style).draw(&mut display).unwrap();
+
+    loop {
+        Timer::after_secs(60).await;
+    };
 }

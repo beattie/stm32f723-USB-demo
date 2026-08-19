@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 embassy-futures = { version = "0.1" }
 embassy-executor  = { version = "0.10", features = ["platform-cortex-m", "executor-thread"] }
-embassy-stm32     = { version = "0.6",  features = ["stm32f723ve", "time-driver-tim2", "unstable-pac"] }
+embassy-stm32     = { version = "0.6",  features = ["stm32f723ve", "time-driver-tim2", "unstable-pac", "defmt"] }
 embassy-usb = { version = "0.6", features = ["defmt"] }
 embassy-usb-host  = { version = "0.1",  features = ["defmt"] }
 embassy-usb-synopsys-otg = { version = "0.3", features = ["host", "defmt"] }
@@ -16,11 +16,21 @@ embassy-sync      = { version = "0.8" }
 
 static_cell = { version = "2" }
 
+block-device-driver = "0.2"
+aligned = "0.4"
+
 cortex-m         = { version = "0.7", features = ["inline-asm", "critical-section-single-core"] }
 cortex-m-rt      = "0.7"
 defmt            = "0.3"
 defmt-rtt        = "0.4"
 panic-probe      = { version = "0.3", features = ["print-defmt"] }
+
+mipidsi = "0.10"			# ST7735 display driver
+embedded-graphics = "0.8"	# drawing primitives (text, shapes)
+embedded-hal-bus = "0.2"	# SpiDevice wrapper for the SPI bus
+display-interface-spi = "0.5"
+
+heapless = "0.8"
 
 [patch.crates-io]
 # Fix: STM32F723 OTGPHYC (InternalHighSpeed) needs ULPI AHB clock even in internal mode
@@ -34,3 +44,9 @@ opt-level = 1      # avoid pathologically slow debug builds on embedded
 debug = 2          # keep symbols for probe-rs/defmt
 opt-level = "s"
 lto = true
+
+[features]
+default = ["sdmmc_1bit"]
+gpio-test = []
+sdmmc_1bit = []
+sdmmc_4bit = []

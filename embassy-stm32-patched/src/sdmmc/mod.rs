@@ -1117,10 +1117,9 @@ impl<'d> Sdmmc<'d> {
             if status.txunderr() {
                 return Poll::Ready(Err(Error::Underrun));
             }
-            #[cfg(sdmmc_v1)]
-            if status.stbiterr() {
-                return Poll::Ready(Err(Error::StBitErr));
-            }
+            // Check done before stbiterr: STM32F72x/73x errata ES0472 §2.3.3 —
+            // STBITERR is set spuriously at end of successful transfer alongside DBCKEND.
+            // Prioritise DBCKEND/DATAEND so a completed transfer is not misreported as an error.
             #[cfg(sdmmc_v1)]
             let done = match block {
                 true => status.dbckend(),
@@ -1130,6 +1129,10 @@ impl<'d> Sdmmc<'d> {
             let done = status.dataend();
             if done {
                 return Poll::Ready(Ok(()));
+            }
+            #[cfg(sdmmc_v1)]
+            if status.stbiterr() {
+                return Poll::Ready(Err(Error::StBitErr));
             }
             Poll::Pending
         })
