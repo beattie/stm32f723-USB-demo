@@ -53,6 +53,7 @@ use embassy_usb_host::{BusController, BusHandle};
 
 use embassy_sync::signal::Signal;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::channel::Channel;
 
 use static_cell::StaticCell;
 
@@ -84,6 +85,14 @@ defmt::timestamp!("{=u64:us}", embassy_time::Instant::now().as_micros());
 type HsDriver = UsbDriver<'static, embassy_stm32::peripherals::USB_OTG_HS>;
 
 static HW_VERSION: AtomicU8 = AtomicU8::new(0);
+
+enum DisplayCmd {
+    WriteLine(u8, heapless::String<26>),    // row, text
+    Clear,
+}
+
+static DISPLAY_CHANNEL: Channel<CriticalSectionRawMutex, DisplayCmd, 4> =
+        Channel::new();
 
 #[derive(Clone, Copy)]
 enum LedCmd {
@@ -435,6 +444,7 @@ async fn sd_task(
     _d3:     Peri<'static, embassy_stm32::peripherals::PC11>,
 ) {
     info!("SD task started");
+    let mut buf: String<26> = String::new();
 
 #[cfg(feature = "gpio-test")]
 {
@@ -476,6 +486,15 @@ async fn sd_task(
             Ok(mut dev) => {
                 info!("SD card: {}MB", dev.card().size() / 1_000_000);
                 // 512 bytes, one SD block
+                buf.clear();
+                if dev.card().size() > 1_000_000_000 {
+                    write!(&mut buf, "SD card: {}GB", dev.card().size() /
+                           1_000_000_000).unwrap();
+                } else {
+                    write!(&mut buf, "SD card: {}MB", dev.card().size() /
+                           1_000_000).unwrap();
+                }
+                DISPLAY_CHANNEL.send(DisplayCmd::WriteLine(28, buf)).await;
                 let mut buf: Aligned<A4, [u8; 512]> = Aligned([0u8; 512]);
                 loop {
                     dev.read(0, core::slice::from_mut(&mut buf)).await.ok();
@@ -485,6 +504,7 @@ async fn sd_task(
             }
             Err(e) => {
                 info!("SD init failed: {:?}", e);
+                DISPLAY_CHANNEL.send(DisplayCmd::Clear).await;
                 embassy_time::Timer::after_millis(1000).await;
             }
         }
@@ -549,6 +569,14 @@ async fn display_task(
         .draw(&mut display).unwrap();
 
     loop {
-        Timer::after_secs(60).await;
-    };
+        match DISPLAY_CHANNEL.receive().await {
+            DisplayCmd::WriteLine(row, text) => {
+                Text::with_text_style(&text, Point::new(0, row.into()), body_style,
+                                      text_style).draw(&mut display).unwrap();
+            }
+            DisplayCmd::Clear => {
+                    display.clear(Rgb565::BLACK).unwrap();
+            }
+        };
+    }
 }
