@@ -524,6 +524,7 @@ async fn display_task(
         .reset_pin(rst)
         .color_order(ColorOrder::Bgr)
         .display_size(128, 128)
+        .display_offset(2, 1)
         .init(&mut embassy_time::Delay).unwrap();
 
     display.clear(Rgb565::BLACK).unwrap();
@@ -538,7 +539,7 @@ async fn display_task(
     
     // Create a text at position (0,0) and draw it using the previously
     // defined style
-    Text::new(&buf, Point::new(5,8), style).draw(&mut display).unwrap();
+    Text::new(&buf, Point::new(0,8), style).draw(&mut display).unwrap();
 
     loop {
         Timer::after_secs(60).await;
