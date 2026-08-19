@@ -66,10 +66,12 @@ use mipidsi::{Builder,                  // Provides builder for Display
     models::ST7735s
 };
 use embedded_graphics::{prelude::*, pixelcolor::Rgb565};    // Color type
-use embedded_graphics::{
-    mono_font::{ascii::FONT_5X8, MonoTextStyle},
-    text::Text,
-};
+use embedded_graphics::text::Text;
+use embedded_graphics::{mono_font::{ ascii:: FONT_5X7}};
+use embedded_graphics::{mono_font::{ ascii:: FONT_7X14}};
+use embedded_graphics::{mono_font::MonoTextStyle};
+use embedded_graphics::text::{Baseline, TextStyleBuilder};
+
 use heapless::String;
 use core::fmt::Write;
 
@@ -527,19 +529,24 @@ async fn display_task(
         .display_offset(2, 1)
         .init(&mut embassy_time::Delay).unwrap();
 
+    let mut buf: String<25> = String::new();
+
     display.clear(Rgb565::BLACK).unwrap();
 
     // Create a new character style
-    let style = MonoTextStyle::new(&FONT_5X8, Rgb565::WHITE);
+    let text_style = TextStyleBuilder::new().baseline(Baseline::Top).build();
+    let header_style = MonoTextStyle::new(&FONT_7X14, Rgb565::WHITE);
+    let body_style = MonoTextStyle::new(&FONT_5X7, Rgb565::WHITE);
 
-    let mut buf: String<25> = String::new();
+    write!(&mut buf, "Interposer").unwrap();
+    Text::with_text_style(&buf, Point::new(0,0), header_style, text_style)
+        .draw(&mut display).unwrap();
+    //Text::new(&buf, Point::new(0,14), style).draw(&mut display).unwrap();
 
-    write!(&mut buf, "Interposer HW ver = {}",
-           HW_VERSION.load(Ordering::Relaxed)).unwrap();
-    
-    // Create a text at position (0,0) and draw it using the previously
-    // defined style
-    Text::new(&buf, Point::new(0,8), style).draw(&mut display).unwrap();
+    buf.clear();
+    write!(&mut buf, "HW ver = {}", HW_VERSION.load(Ordering::Relaxed)).unwrap();
+    Text::with_text_style(&buf, Point::new(0,14), header_style, text_style)
+        .draw(&mut display).unwrap();
 
     loop {
         Timer::after_secs(60).await;
