@@ -121,8 +121,13 @@ Pictures/   board photos
   - PC sees: idVendor=0483 idProduct=572b, "STM32 Human interface", new high-speed USB device
   - Commit: e2db57c
 - [x] USB keyboard passthrough demo — USB-A host → STM32 → USB-C device, boot keyboard HID, confirmed working 2026-08-13 (commit bf10687)
-- [ ] MicroSD bring-up — abandoned on v0.1 (STBITERR, broken connector GND); retry on v0.2 with full-size SD connector
-- [ ] Port password manager demo from stm32f746-disc (Rust) to C
+- [x] Rust/Embassy firmware (interposer/) — active development, see below
+- [x] MicroSD bring-up on v0.2 — 1-bit mode confirmed (PNY 64GB, 62226MB); 4-bit mode fails with STBITERR (D1/D2/D3 issue, root cause unknown); 1-bit in use
+- [x] ST7735 display in Rust/Embassy — dual-font text, DisplayCmd channel, display_offset(2,1) fix 2026-08-19
+- [x] USB MSC composite device — HID keyboard + mass storage, enumerates on Linux, SD card exposed via SCSI/BOT skeleton 2026-08-20
+- [ ] MSC READ(10)/WRITE(10) with real SD data (SCSI stubs return FAIL currently)
+- [ ] SD shared access: MSC + password manager simultaneously (SD manager task with request/response channel)
+- [ ] Password manager state machine — Rust/Embassy port from ~/projects/stm32f746-disc
 
 ## v0.2 Status
 
@@ -132,8 +137,12 @@ Pictures/   board photos
 - [x] USB-A host bring-up — AnnePro2 FS HID keyboard enumerated and active 2026-08-12
 - [x] UART2 debug logging — PA2/PA3 J7 header confirmed working 2026-08-13
 - [x] USB-C device bring-up — HS HID (480 Mbps) enumerating on PC 2026-08-13 (commit e2db57c)
-- [ ] MicroSD bring-up (full-size SD connector)
-- [ ] Firmware: change HID descriptor to keyboard + port password manager state machine
+- [x] MicroSD bring-up — 1-bit mode confirmed 2026-08-17; 4-bit STBITERR pending investigation
+- [x] ST7735 display — dual-font, DisplayCmd channel, working 2026-08-19
+- [x] USB MSC composite device — HID + MSC enumerating on Linux 2026-08-20 (commit 20502af)
+- [ ] MSC READ(10)/WRITE(10) with real SD data
+- [ ] SD shared access for password manager
+- [ ] Password manager state machine (Rust/Embassy)
 
 ## DFU Notes
 
