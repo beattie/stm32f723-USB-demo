@@ -25,6 +25,11 @@ pub struct Msc<'d, D: Driver<'d>> {
     ep_in:  D::EndpointIn,
 }
 
+pub trait SdAccess {
+    async fn read_sector(&mut self, lba: u32, buf: &mut [u8; 512]) -> bool;
+    fn capacity_sectors(&self) -> u32;
+}
+
 impl<'d, D: Driver<'d>> Msc<'d, D> {
     pub fn new(builder: &mut Builder<'d, D>) -> Self {
         let (ep_out, ep_in) = {
@@ -38,13 +43,17 @@ impl<'d, D: Driver<'d>> Msc<'d, D> {
         Self { ep_out, ep_in }
     }
 
-    pub async fn run(&mut self) {
+    pub async fn run<S: SdAccess>(&mut self, sd: &mut S) {
         self.ep_out.wait_enabled().await;
         info!("MSC: endpoint enabled");
         loop {
-            let mut cbw = [0u8; 64];
-            if self.read_exact(&mut cbw).await.is_err() {
-                self.ep_out.wait_enabled().await;
+            let mut cbw = [0u8; 512];
+            let n = match self.ep_out.read(&mut cbw).await {
+                Ok(n) => n,
+                Err(_) => { self.ep_out.wait_enabled().await; continue; }
+            };
+            if n < 31 {
+                info!("MSC: short CBW ({})", n);
                 continue;
             }
 
@@ -62,7 +71,7 @@ impl<'d, D: Driver<'d>> Msc<'d, D> {
 
             info!("MSC: cmd={:02x} len={} flags={:02x}", cb[0], length, flags);
 
-            let status = self.handle_scsi(cb, flags, length).await;
+            let status = self.handle_scsi(cb, flags, length, sd).await;
 
             let mut csw = [0u8; 13];
             csw[0..4].copy_from_slice(&CSW_SIGNATURE.to_le_bytes());
@@ -73,7 +82,8 @@ impl<'d, D: Driver<'d>> Msc<'d, D> {
         }
     }
 
-    async fn handle_scsi(&mut self, cb: &[u8], flags: u8, length: u32) -> u8 {
+    async fn handle_scsi<S: SdAccess>
+            (&mut self, cb: &[u8], flags: u8, length: u32, sd: &mut S) -> u8 {
         let dir_in = flags & 0x80 != 0;
         match cb[0] {
             SCSI_TEST_UNIT_READY => {
@@ -88,6 +98,7 @@ impl<'d, D: Driver<'d>> Msc<'d, D> {
                     r[1] = 0x80;    // removable
                     r[2] = 0x02;    // SCSI-2
                     r[3] = 0x02;    // response data format
+                    r[4] = 31;      // additional length = 36 - 5
                     r[8..16].copy_from_slice(b"Interpos");
                     r[16..32].copy_from_slice(b"SD Card         ");
                     r[32..36].copy_from_slice(b"1.00");
@@ -119,16 +130,28 @@ impl<'d, D: Driver<'d>> Msc<'d, D> {
             }
             SCSI_START_STOP_UNIT | SCSI_PREVENT_ALLOW => CSW_OK,
             SCSI_READ_CAPACITY_10 => {
-                info!("MSC: READ CAPACITY(10) — placeholder");
+                info!("MSC: READ CAPACITY(10)");
+                let last_lba = sd.capacity_sectors() - 1;
                 let mut r = [0u8; 8];
-                r[0..4].copy_from_slice(&0u32.to_be_bytes());   // last LBA
+                r[0..4].copy_from_slice(&last_lba.to_be_bytes());   // last LBA
                 r[4..8].copy_from_slice(&512u32.to_be_bytes());
                 let _ = self.write_all(&r).await;
                 CSW_OK
             }
             SCSI_READ_10 => {
-                info!("MSC: READ(10) — not yet implemented");
-                CSW_FAIL
+                let lba     = u32::from_be_bytes(cb[2..6].try_into().unwrap());
+                let sectors = u16::from_be_bytes(cb[7..9].try_into().unwrap());
+                info!("MSC: READ(10) lba={} sectors={}", lba, sectors);
+                let mut buf = [0u8; 512];
+                for i in 0..sectors {
+                    if !sd.read_sector(lba + i as u32, &mut buf).await {
+                        return CSW_FAIL;
+                    }
+                    if self.write_all(&buf).await.is_err() {
+                        return CSW_FAIL;
+                    }
+                }
+                CSW_OK
             }
             SCSI_WRITE_10 => {
                 info!("MSC: WRITE(10) — not yet implemented");

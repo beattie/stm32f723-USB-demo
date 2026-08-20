@@ -24,7 +24,7 @@ use embassy_stm32::rcc::{
 use embassy_stm32::time::Hertz;
 use embassy_stm32::Config;
 use embassy_stm32::sdmmc::{Sdmmc, Config as SdmmcConfig};
-use embassy_stm32::sdmmc::sd::{StorageDevice, CmdBlock, Addressable};
+use embassy_stm32::sdmmc::sd::{StorageDevice, CmdBlock, Addressable, Card, DataBlock};
 
 use embassy_stm32::usb::InterruptHandler as UsbInterruptHandler;
 use embassy_stm32::usb::Driver as UsbDriver;
@@ -143,6 +143,25 @@ static HID_KEYBOARD_REPORT_DESC: &[u8] = &[
 ];
 
 struct OtgFsHostIrq;
+
+struct MscSd<'a, 'b> {
+    dev: StorageDevice<'a, 'b, Card>,
+    capacity: u32,
+}
+
+impl<'a, 'b> msc::SdAccess for MscSd<'a, 'b> {
+    async fn read_sector(&mut self, lba: u32, buf: &mut [u8; 512]) -> bool {
+        let mut block = DataBlock::new();
+        if self.dev.read_block(lba, &mut block).await.is_err() {
+            return false;
+        }
+        for (i, word) in block.0.iter().enumerate() {
+            buf[i*4..i*4+4].copy_from_slice(&word.to_le_bytes());
+        }
+        true
+    }
+    fn capacity_sectors(&self) -> u32 { self.capacity }
+}
 
 impl Handler<interrupt::typelevel::OTG_FS> for OtgFsHostIrq {
     unsafe fn on_interrupt() {
@@ -287,14 +306,12 @@ async fn main(spawner: Spawner) {
     spawner.spawn(kbd_task(controller, handle, p.PB0, hid_writer).unwrap());
     info!("keyboard spawned");
 
-    spawner.spawn(sd_task(
+    let msc = MSC.init(msc);
+    spawner.spawn(msc_task(msc,
             p.SDMMC1, p.DMA2_CH3,
             p.PC12, p.PD2,
             p.PC8, p.PC9, p.PC10, p.PC11,
-    ).unwrap());
-    info!("sd spawned");
-    let msc = MSC.init(msc);
-    spawner.spawn(msc_task(msc).unwrap());
+                           ).unwrap());
     info!("msc spawned");
 
     loop {
@@ -609,7 +626,34 @@ unsafe fn HardFault(ef: &cortex_m_rt::ExceptionFrame) -> ! {
 }
 
 #[embassy_executor::task]
-async fn msc_task(msc: &'static mut msc::Msc<'static, HsDriver>) {
+async fn msc_task(
+    msc: &'static mut msc::Msc<'static, HsDriver>,
+    sdmmc:  Peri<'static, embassy_stm32::peripherals::SDMMC1>,
+    dma:    Peri<'static, embassy_stm32::peripherals::DMA2_CH3>,
+    clk:    Peri<'static, embassy_stm32::peripherals::PC12>,
+    cmd:    Peri<'static, embassy_stm32::peripherals::PD2>,
+    d0:     Peri<'static, embassy_stm32::peripherals::PC8>,
+    _d1:     Peri<'static, embassy_stm32::peripherals::PC9>,
+    _d2:     Peri<'static, embassy_stm32::peripherals::PC10>,
+    _d3:     Peri<'static, embassy_stm32::peripherals::PC11>,
+) {
     info!("MSC task started");
-    msc.run().await;
+    let mut sd_hw = Sdmmc::new_1bit(sdmmc, dma, Irqs, clk, cmd, d0,
+                                    SdmmcConfig::default());
+    let mut cmd_block = CmdBlock::new();
+    embassy_time::Timer::after_millis(500).await;
+    loop {
+        match StorageDevice::new_sd_card(&mut sd_hw, &mut cmd_block,
+                                         Hertz(400_000)).await {
+            Ok(dev) => {
+                let capacity = (dev.card().size() / 512) as u32;
+                let mut sd = MscSd { dev, capacity };
+                msc.run(&mut sd).await;
+            }
+            Err(e) => {
+                info!("MSC: SD init failed: {:?}", e);
+                embassy_time::Timer::after_millis(1000).await;
+            }
+        }
+    }
 }
