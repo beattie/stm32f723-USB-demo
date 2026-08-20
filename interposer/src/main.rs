@@ -80,6 +80,9 @@ use aligned::{Aligned, A4};
 
 use panic_probe as _;
 
+mod msc;
+static MSC: StaticCell<msc::Msc<'static, HsDriver>> = StaticCell::new();
+
 defmt::timestamp!("{=u64:us}", embassy_time::Instant::now().as_micros());
 
 type HsDriver = UsbDriver<'static, embassy_stm32::peripherals::USB_OTG_HS>;
@@ -202,6 +205,7 @@ async fn main(spawner: Spawner) {
     let mut usb_config = embassy_stm32::usb::Config::default();
     usb_config.vbus_detection = false;
 
+    info!("creating USB driver");
     let driver = UsbDriver::new_hs(
         p.USB_OTG_HS, Irqs,
         p.PB15, p.PB14, // DP, DM
@@ -209,6 +213,7 @@ async fn main(spawner: Spawner) {
         usb_config,
     );
 
+    info!("creating builder");
     let mut builder = embassy_usb::Builder::new(
         driver,
         usb_dev_config,
@@ -217,6 +222,10 @@ async fn main(spawner: Spawner) {
         BOS_DESC.init([0u8; 64]),
         MSOS_DESC.init([0u8; 64]),
     );
+
+    info!("creating MSC");
+    let msc = msc::Msc::new(&mut builder);
+
 
     let hid_config = HidConfig {
         report_descriptor: HID_KEYBOARD_REPORT_DESC,
@@ -227,8 +236,11 @@ async fn main(spawner: Spawner) {
         hid_boot_protocol: HidBootProtocol::Keyboard,
     };
     let hid_state = HID_STATE.init(HidState::new());
+    info!("creating HID");
     let hid_writer = HidWriter::<_, 8>::new(&mut builder, hid_state, hid_config);
+    info!("building USB Device");
     let usb_device = builder.build();
+    info!("spawning tasks");
 
     let _dm = {
         let mut pin = Flex::new(p.PA11);
@@ -263,18 +275,27 @@ async fn main(spawner: Spawner) {
     // OTGPHYC clock for OTG_HS HS PHY
     pac::RCC.apb2enr().modify(|w| w.set_usbphycen(true));
     unsafe { init_otgphyc(); }
+    info!("spawning tasks");
     spawner.spawn(usb_task(usb_device).unwrap());
+    info!("usb spawned");
 
     spawner.spawn(led_task(p.PE9, p.PE11, p.PE13).unwrap());
+    info!("led spawned");
     spawner.spawn(display_task(p.SPI1, p.PA5, p.PA7, p.PA4, p.PB1, p.PA1,
                                p.PA15).unwrap());
+    info!("display spawned");
     spawner.spawn(kbd_task(controller, handle, p.PB0, hid_writer).unwrap());
+    info!("keyboard spawned");
 
     spawner.spawn(sd_task(
             p.SDMMC1, p.DMA2_CH3,
             p.PC12, p.PD2,
             p.PC8, p.PC9, p.PC10, p.PC11,
     ).unwrap());
+    info!("sd spawned");
+    let msc = MSC.init(msc);
+    spawner.spawn(msc_task(msc).unwrap());
+    info!("msc spawned");
 
     loop {
         Timer::after_millis(1000).await;
@@ -579,4 +600,16 @@ async fn display_task(
             }
         };
     }
+}
+
+#[cortex_m_rt::exception]
+unsafe fn HardFault(ef: &cortex_m_rt::ExceptionFrame) -> ! {
+    defmt::error!("HardFault! PC={:08x}", ef.pc());
+    loop {}
+}
+
+#[embassy_executor::task]
+async fn msc_task(msc: &'static mut msc::Msc<'static, HsDriver>) {
+    info!("MSC task started");
+    msc.run().await;
 }
