@@ -109,7 +109,7 @@ static LED_CMD: Signal<CriticalSectionRawMutex, LedCmd> = Signal::new();
 static HOST_STATE: HostState<8> = HostState::new();
 static BUS_STATE: BusState = BusState::new();
 
-static EP_OUT_BUF:      StaticCell<[u8; 256]>   = StaticCell::new();
+static EP_OUT_BUF:      StaticCell<[u8; 1024]>  = StaticCell::new();
 static DEV_DESC:        StaticCell<[u8; 256]>   = StaticCell::new();
 static CONF_DESC:       StaticCell<[u8; 256]>   = StaticCell::new();
 static BOS_DESC:        StaticCell<[u8; 64]>    = StaticCell::new();
@@ -209,7 +209,7 @@ async fn main(spawner: Spawner) {
     let driver = UsbDriver::new_hs(
         p.USB_OTG_HS, Irqs,
         p.PB15, p.PB14, // DP, DM
-        EP_OUT_BUF.init([0u8; 256]),
+        EP_OUT_BUF.init([0u8; 1024]),
         usb_config,
     );
 

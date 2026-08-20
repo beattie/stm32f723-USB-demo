@@ -31,8 +31,8 @@ impl<'d, D: Driver<'d>> Msc<'d, D> {
             let mut func = builder.function(0x08, 0x06, 0x50);
             let mut iface = func.interface();
             let mut alt = iface.alt_setting(0x08, 0x06, 0x50, None);
-            let ep_out = alt.endpoint_bulk_out(None, 64);
-            let ep_in  = alt.endpoint_bulk_in(None, 64);
+            let ep_out = alt.endpoint_bulk_out(None, 512);
+            let ep_in  = alt.endpoint_bulk_in(None, 512);
             (ep_out, ep_in)
         };
         Self { ep_out, ep_in }
@@ -153,7 +153,7 @@ impl<'d, D: Driver<'d>> Msc<'d, D> {
     async fn write_all(&mut self, buf: &[u8]) -> Result<(), ()> {
         let mut pos = 0;
         while pos < buf.len() {
-            let end = (pos + 64).min(buf.len());
+            let end = (pos + 512).min(buf.len());
             self.ep_in.write(&buf[pos..end]).await.map_err(|_| ())?;
             pos = end;
         }
