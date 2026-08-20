@@ -27,6 +27,7 @@ pub struct Msc<'d, D: Driver<'d>> {
 
 pub trait SdAccess {
     async fn read_sector(&mut self, lba: u32, buf: &mut [u8; 512]) -> bool;
+    async fn write_sector(&mut self, lba: u32, buf: &[u8; 512]) -> bool;
     fn capacity_sectors(&self) -> u32;
 }
 
@@ -154,8 +155,19 @@ impl<'d, D: Driver<'d>> Msc<'d, D> {
                 CSW_OK
             }
             SCSI_WRITE_10 => {
-                info!("MSC: WRITE(10) — not yet implemented");
-                CSW_FAIL
+                let lba     = u32::from_be_bytes(cb[2..6].try_into().unwrap());
+                let sectors = u16::from_be_bytes(cb[7..9].try_into().unwrap());
+                info!("MSC: WRITE(10) lba={} sectors={}", lba, sectors);
+                let mut buf = [0u8; 512];
+                for i in 0..sectors {
+                    if self.read_sector_buf(&mut buf).await.is_err() {
+                        return CSW_FAIL;
+                    }
+                    if !sd.write_sector(lba + i as u32, &buf).await {
+                        return CSW_FAIL;
+                    }
+                }
+                CSW_OK
             }
             op => {
                 info!("MSC: unknown opcode {:02x}", op);
@@ -182,4 +194,15 @@ impl<'d, D: Driver<'d>> Msc<'d, D> {
         }
         Ok(())
     }
+
+    async fn read_sector_buf(&mut self, buf: &mut [u8; 512]) ->
+                Result<(), ()> {
+        let mut pos = 0;
+        while pos < 512 {
+            let n = self.ep_out.read(&mut buf[pos..]).await.map_err(|_| ())?;
+            pos += n;
+        }
+        Ok(())
+    }
+
 }

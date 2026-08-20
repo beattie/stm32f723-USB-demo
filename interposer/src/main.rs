@@ -160,6 +160,13 @@ impl<'a, 'b> msc::SdAccess for MscSd<'a, 'b> {
         }
         true
     }
+    async fn write_sector(&mut self, lba: u32, buf: &[u8; 512]) -> bool {
+        let mut block = DataBlock::new();
+        for (i, word) in block.0.iter_mut().enumerate() {
+            *word = u32::from_le_bytes(buf[i*4..i*4+4].try_into().unwrap());
+        }
+        self.dev.write_block(lba, &block).await.is_ok()
+    }
     fn capacity_sectors(&self) -> u32 { self.capacity }
 }
 
