@@ -124,8 +124,9 @@ Pictures/   board photos
 - [x] Rust/Embassy firmware (interposer/) — active development, see below
 - [x] MicroSD bring-up on v0.2 — 1-bit mode confirmed (PNY 64GB, 62226MB); 4-bit mode fails with STBITERR (D1/D2/D3 issue, root cause unknown); 1-bit in use
 - [x] ST7735 display in Rust/Embassy — dual-font text, DisplayCmd channel, display_offset(2,1) fix 2026-08-19
-- [x] USB MSC composite device — HID keyboard + mass storage, enumerates on Linux, SD card exposed via SCSI/BOT skeleton 2026-08-20
-- [ ] MSC READ(10)/WRITE(10) with real SD data (SCSI stubs return FAIL currently)
+- [x] USB MSC composite device — HID keyboard + mass storage, enumerates on Linux, SD card exposed via SCSI/BOT 2026-08-20
+- [x] MSC READ(10) with real SD data — Linux mounts SD card as sdb, filesystem visible 2026-08-20 (commit a480921)
+- [ ] MSC WRITE(10) — currently returns CSW_FAIL
 - [ ] SD shared access: MSC + password manager simultaneously (SD manager task with request/response channel)
 - [ ] Password manager state machine — Rust/Embassy port from ~/projects/stm32f746-disc
 
@@ -140,7 +141,8 @@ Pictures/   board photos
 - [x] MicroSD bring-up — 1-bit mode confirmed 2026-08-17; 4-bit STBITERR pending investigation
 - [x] ST7735 display — dual-font, DisplayCmd channel, working 2026-08-19
 - [x] USB MSC composite device — HID + MSC enumerating on Linux 2026-08-20 (commit 20502af)
-- [ ] MSC READ(10)/WRITE(10) with real SD data
+- [x] MSC READ(10) — SD card mounts as sdb on Linux, filesystem readable 2026-08-20 (commit a480921)
+- [ ] MSC WRITE(10)
 - [ ] SD shared access for password manager
 - [ ] Password manager state machine (Rust/Embassy)
 
