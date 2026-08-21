@@ -70,8 +70,6 @@ impl<'d, D: Driver<'d>> Msc<'d, D> {
             let cb_len = (cbw[14] & 0x1F) as usize;
             let cb     = &cbw[15..15 + cb_len.min(16)];
 
-            info!("MSC: cmd={:02x} len={} flags={:02x}", cb[0], length, flags);
-
             let status = self.handle_scsi(cb, flags, length, sd).await;
 
             let mut csw = [0u8; 13];
