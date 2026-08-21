@@ -165,6 +165,33 @@ UNLOCKED
 
 ---
 
+## Password Entry & Generation
+
+### Manual entry
+
+New credentials entered on-device using the passthrough keyboard:
+
+1. User triggers "new entry" mode from PM_SELECT
+2. Display shows `Site:` — user types site/username, presses Enter
+3. Display shows `Password:` — user types password, OR presses a key to generate
+4. Device appends entry to `password.sec` (decrypt → append → re-encrypt)
+
+### Random generation
+
+- **Source**: STM32 hardware TRNG — already present, used for nonces
+- **Character set**: `a-z A-Z 0-9 !@#$%^&*-_+=` (no ambiguous chars like `0O1lI`)
+- **Default length**: 20 characters; configurable 12–32
+- **UX**: generated password shown on display before committing — user can confirm or regenerate
+- **On confirm**: entry stored in `password.sec` AND typed to host via HID so the site receives it immediately
+
+Word-based (diceware) passwords not implemented: wordlist (~80KB) would need to live on SD card, adds complexity, and many sites reject passphrases.
+
+### Implementation dependency
+
+Both manual entry and random generation require a **text input loop**: reading keystrokes from the passthrough keyboard (already captured in `kbd_task`) and echoing masked input on the display. This is the foundation all password manager UI builds on.
+
+---
+
 ## Future Features
 
 ### FIDO2 / WebAuthn
