@@ -110,14 +110,34 @@ Offset  Size  Field
 
 ## Password Database Format (plaintext, before encryption)
 
-```
-IPMGR\n                     — magic header
-username\tpassword\n        — one entry per line, tab-separated
-username\tpassword\n
-...
+INI-style, section-per-entry. Human-readable and editable with any text editor before encryption.
+
+```ini
+IPMGR
+
+[github.com]
+username = beattie
+password = Kx7!mP2#qL
+comment = work account
+
+[gmail.com]
+username = beattie@gmail.com
+password = correct-horse-battery
 ```
 
-Simple, human-readable, editable with a text editor before encryption. After encryption stored as `password.sec`.
+**Rules:**
+- First line is the magic header `IPMGR`
+- Each entry is a `[section]` where the section name is the site label shown on the display
+- Fields are `key = value` — order within a section does not matter
+- Blank lines between entries are ignored
+- Unknown fields are preserved on re-write (forward compatibility)
+- `comment` field is optional — shown on display, not typed to host
+
+**Known fields:** `username`, `password`, `comment`
+
+**Open question:** encrypt the whole file as one blob, or encrypt only the password fields and keep structure plaintext. Whole-file is simpler and leaks no metadata; per-field allows browsing entry names without the key. Decision deferred.
+
+After encryption stored as `password.sec`.
 
 ---
 
