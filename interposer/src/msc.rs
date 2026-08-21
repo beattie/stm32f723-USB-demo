@@ -87,10 +87,7 @@ impl<'d, D: Driver<'d>> Msc<'d, D> {
             (&mut self, cb: &[u8], flags: u8, length: u32, sd: &mut S) -> u8 {
         let dir_in = flags & 0x80 != 0;
         match cb[0] {
-            SCSI_TEST_UNIT_READY => {
-                info!("MSC: TEST UNIT READY");
-                CSW_OK
-            }
+            SCSI_TEST_UNIT_READY => CSW_OK,
             SCSI_INQUIRY => {
                 info!("MSC: INQUIRY");
                 if dir_in {

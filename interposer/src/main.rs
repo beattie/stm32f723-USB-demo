@@ -651,7 +651,7 @@ async fn msc_task(
     embassy_time::Timer::after_millis(500).await;
     loop {
         match StorageDevice::new_sd_card(&mut sd_hw, &mut cmd_block,
-                                         Hertz(400_000)).await {
+                                         Hertz(12_000_000)).await {
             Ok(dev) => {
                 let capacity = (dev.card().size() / 512) as u32;
                 let mut sd = MscSd { dev, capacity };
