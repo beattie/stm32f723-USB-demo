@@ -165,6 +165,68 @@ UNLOCKED
 
 ---
 
+## Future Features
+
+### FIDO2 / WebAuthn
+
+A FIDO2 token eliminates the need to type passwords entirely for supported sites. The site sends a challenge, the device signs it with a per-site private key, the site verifies. The secret never leaves the device — immune to host keyloggers and phishing, stronger than HID typing for authentication.
+
+**What's needed:**
+- CTAP2 protocol over USB HID (usage page 0xF1D0) — a separate HID interface alongside the keyboard HID; embassy-usb supports multiple HID interfaces
+- Per-site EC key pairs (P-256 or Ed25519), generated on device, stored encrypted on SD
+- User presence confirmation — button press or PIN; display can show which site is requesting
+- Resident keys (discoverable credentials) for passwordless login
+- Spec: FIDO Alliance CTAP2 (open); reference implementation: SoloKeys (open source)
+
+**Fit with this hardware:**
+- Display is a genuine advantage over most FIDO2 tokens — can show the relying party ID before confirming
+- RustCrypto has P-256 (`p256`) and Ed25519 (`ed25519-dalek`)
+- Flash estimate: ~80KB additional
+
+**Priority:** High — clean security model, open spec, good open source reference, doesn't require host software once registered.
+
+---
+
+### Monero Support
+
+Monero's view key / spend key separation is well-suited to a hardware wallet: share the view key with a watch-only wallet to monitor incoming transactions, keep the spend key on the device.
+
+**Realistic subset (feasible on this hardware):**
+- Seed storage (Monero 25-word or BIP39 format) — encrypted on SD, same key derivation as secure storage
+- View key export — derive and display/type the view key for import into Feather Wallet or Monero CLI
+- Ed25519-Monero signing for simple transactions
+- Host interface: Trezor protocol (Feather Wallet already supports it) or custom
+
+**What's probably out of reach:**
+- Full RingCT / Bulletproofs proving — computationally and memory intensive; Bulletproofs require significant RAM for the proof construction
+- Full privacy-preserving transaction signing on-device
+
+**What's needed:**
+- Ed25519-Monero curve arithmetic (a variant of standard Ed25519) — RustCrypto `curve25519-dalek` is a starting point
+- Monero key derivation (Keccak-256, not SHA-3) — RustCrypto `tiny-keccak`
+- Companion software on host required (Feather Wallet or Monero CLI with hardware wallet support)
+- Reference: Trezor Monero implementation (open source)
+
+**Flash estimate:** ~100KB for Ed25519-Monero + key derivation + Trezor protocol subset.
+
+**Priority:** Medium — personally useful (eris Monero node), simpler subset is feasible, full RingCT is not.
+
+---
+
+### Code Space Reality Check (STM32F723: 512KB flash, 256KB RAM)
+
+| Component | Flash estimate |
+|-----------|---------------|
+| Current firmware (USB host+device, MSC, display, SD) | ~150KB |
+| Secure storage (ChaCha20-Poly1305, Argon2id, FAT) | ~100KB |
+| FIDO2 (CTAP2, P-256/Ed25519, key storage) | ~80KB |
+| Monero subset (Ed25519-Monero, seed, view key) | ~100KB |
+| **All four** | **~430KB** — tight but possibly feasible |
+
+RAM is the harder constraint. Argon2id memory parameter and crypto buffers compete with USB stack and task stacks. Measure actual usage after core secure storage is implemented before committing to FIDO2 + Monero simultaneously.
+
+---
+
 ## Open Questions
 
 1. **Argon2id memory parameter** — 256KB RAM leaves very little headroom after firmware stack/data. May need PBKDF2 instead, with a stronger passphrase requirement.
