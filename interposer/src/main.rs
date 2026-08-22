@@ -657,10 +657,10 @@ async fn msc_task(
                                     SdmmcConfig::default());
     let mut cmd_block = CmdBlock::new();
     loop {
-        // wait for card present (PE3 low), poll every 50ms
-        while !CARD_PRESENT.load(Ordering::Relaxed) {
-            Timer::after_millis(50).await;
-        }
+        // Service bulk endpoint while waiting for card — handles initial
+        // SCSI scan (INQUIRY) so the host sees the device immediately,
+        // even before media is present.  Returns when card is inserted.
+        msc.run_no_card(&CARD_PRESENT).await;
         Timer::after_millis(100).await; // debounce
 
         match StorageDevice::new_sd_card(&mut sd_hw, &mut cmd_block,
@@ -670,7 +670,6 @@ async fn msc_task(
                 msc.signal_unit_attention();
                 let mut sd = MscSd { dev, capacity };
                 msc.run(&mut sd).await;
-                msc.run_no_card(&CARD_PRESENT).await;
             }
             Err(e) => {
                 info!("MSC: SD init failed: {:?}", e);

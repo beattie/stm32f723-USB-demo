@@ -155,20 +155,36 @@ impl<'d, D: Driver<'d>> Msc<'d, D> {
             let cb_len = (cbw[14] & 0x1F) as usize;
             let cb     = &cbw[15..15 + cb_len.min(16)];
 
-            // REQUEST_SENSE succeeds (CSW_OK) and returns NOT READY sense data.
-            // All other commands fail (CSW_FAIL).  Returning CSW_FAIL for
-            // REQUEST_SENSE itself tells Linux the sense request is broken,
-            // which triggers an endless BOT-reset → USB-reset loop.
-            let status = if cb[0] == SCSI_REQUEST_SENSE && cbw[12] & 0x80 != 0 {
-                let mut r = [0u8; 18];
-                r[0] = 0x70;
-                r[2] = 0x02; r[12] = 0x3A;  // NOT READY, medium not present
-                r[7] = 10;
-                let n = (length as usize).min(r.len());
-                let _ = self.write_all(&r[..n]).await;
-                CSW_OK
-            } else {
-                CSW_FAIL
+            // INQUIRY and REQUEST_SENSE must succeed (CSW_OK) even without
+            // media — INQUIRY lets the host create the SCSI device object,
+            // REQUEST_SENSE tells it why TEST_UNIT_READY failed.
+            // Everything else fails (CSW_FAIL).
+            let status = match cb[0] {
+                SCSI_INQUIRY if cbw[12] & 0x80 != 0 => {
+                    let mut r = [0u8; 36];
+                    r[0] = 0x00;    // direct access block device
+                    r[1] = 0x80;    // removable
+                    r[2] = 0x02;    // SCSI-2
+                    r[3] = 0x02;    // response data format
+                    r[4] = 31;      // additional length
+                    r[8..16].copy_from_slice(b"Interpos");
+                    r[16..32].copy_from_slice(b"SD Card         ");
+                    r[32..36].copy_from_slice(b"1.00");
+                    let n = (length as usize).min(r.len());
+                    let _ = self.write_all(&r[..n]).await;
+                    CSW_OK
+                }
+                SCSI_REQUEST_SENSE if cbw[12] & 0x80 != 0 => {
+                    let mut r = [0u8; 18];
+                    r[0] = 0x70;
+                    r[2] = 0x02; r[12] = 0x3A;  // NOT READY, medium not present
+                    r[7] = 10;
+                    let n = (length as usize).min(r.len());
+                    let _ = self.write_all(&r[..n]).await;
+                    CSW_OK
+                }
+                SCSI_START_STOP_UNIT | SCSI_PREVENT_ALLOW => CSW_OK,
+                _ => CSW_FAIL,
             };
 
             let mut csw = [0u8; 13];

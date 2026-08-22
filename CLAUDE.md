@@ -127,6 +127,10 @@ Pictures/   board photos
 - [x] USB MSC composite device — HID keyboard + mass storage, enumerates on Linux, SD card exposed via SCSI/BOT 2026-08-20
 - [x] MSC READ(10) with real SD data — Linux mounts SD card as sdb, filesystem visible 2026-08-20 (commit a480921)
 - [x] MSC WRITE(10) — confirmed working, echo to FAT partition verified via USB reader 2026-08-20 (commit 8447d64)
+- [x] SD card removal/insertion/change detection — clean unmount on removal, UnitAttention on reinsertion, card swap confirmed working 2026-08-21
+  - BOT Mass Storage Reset (0xFF) and Get Max LUN (0xFE) handled via embassy_usb::Handler — fixes USB reset loop on removal
+  - run_no_card() services bulk endpoint while card absent; INQUIRY answered with CSW_OK so SCSI device object is created immediately
+  - Known issue: starting with no card inserted → Linux does not automount on first card insertion (udisks2 treats hot media insert differently from new device attach); start with card inserted for automount
 - [ ] SD shared access: MSC + password manager simultaneously (SD manager task with request/response channel)
 - [ ] Password manager state machine — Rust/Embassy port from ~/projects/stm32f746-disc
 
@@ -143,6 +147,8 @@ Pictures/   board photos
 - [x] USB MSC composite device — HID + MSC enumerating on Linux 2026-08-20 (commit 20502af)
 - [x] MSC READ(10) — SD card mounts as sdb on Linux, filesystem readable 2026-08-20 (commit a480921)
 - [x] MSC WRITE(10) — confirmed working 2026-08-20 (commit 8447d64)
+- [x] SD card removal/insertion/change detection — 2026-08-21; card swap confirmed working
+  - Known issue: no automount when starting with no card inserted (udisks2 limitation)
 - [ ] SD shared access for password manager
 - [ ] Password manager state machine (Rust/Embassy)
 
