@@ -1,10 +1,15 @@
 #![no_std]
 #![no_main]
 
+mod pm;
+
 use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use core::fmt::Write;
+
+use heapless::String;
 
 use embassy_futures::select::{select, Either};
 
@@ -70,11 +75,8 @@ use embedded_graphics::{prelude::*, pixelcolor::Rgb565};    // Color type
 use embedded_graphics::text::Text;
 use embedded_graphics::{mono_font::{ ascii:: FONT_5X7}};
 use embedded_graphics::{mono_font::{ ascii:: FONT_7X14}};
-use embedded_graphics::{mono_font::MonoTextStyle};
+use embedded_graphics::mono_font::{MonoTextStyle, MonoTextStyleBuilder};
 use embedded_graphics::text::{Baseline, TextStyleBuilder};
-
-use heapless::String;
-use core::fmt::Write;
 
 use aligned::{Aligned, A4};
 
@@ -356,6 +358,12 @@ async fn kbd_task(
 ) {
     // Enable USB-A VBUS
     let _usba_en = Output::new(vbus_ena, Level::High, GpioSpeed::Low);
+    let mut pm = pm::PmState::new();
+
+    // Show initial state
+    let mut s: heapless::String<26> = heapless::String::new();
+    write!(s, "{}", pm.mode.label()).ok();
+    DISPLAY_CHANNEL.send(DisplayCmd::WriteLine(28, s)).await;
 
     loop {
         LED_CMD.signal(LedCmd::KeyboardDisconnected);
@@ -403,14 +411,24 @@ async fn kbd_task(
                 }
                 Either::Second(Ok(HandlerEvent::HandlerEvent(
                             KbdEvent::KeyStatusUpdate(update)))) => {
-                    info!("mod={:08b} keys={:?}",
-                          update.modifiers, update.keypress);
-                    let mut report = [0u8; 8];
-                    report[0] = update.modifiers;
-                    for (i, k) in update.keypress.iter().enumerate() {
-                        report[2 + i] = k.map_or(0, |v| v.get());
+                    match pm.handle_key(update.modifiers, &update.keypress) {
+                        pm::PmAction::Passthrough => {
+                            let mut report = [0u8; 8];
+                            report[0] = update.modifiers;
+                            for (i, k) in update.keypress.iter().enumerate() {
+                                report[2 + i] = k.map_or(0, |v| v.get());
+                            }
+                            let _ = hid.write(&report).await;
+                        }
+                        pm::PmAction::Swallow => {}
+                        pm::PmAction::UpdateDisplay => {
+                            let mut s: heapless::String<26> = heapless::
+                                String::new();
+                            write!(s, "{}", pm.mode.label()).ok();
+                            DISPLAY_CHANNEL.send(DisplayCmd::WriteLine(28, s))
+                                .await;
+                        }
                     }
-                    let _ = hid.write(&report).await;
                 }
                 Either::Second(Ok(_)) => {}
                 Either::Second(Err(e)) => {
@@ -609,7 +627,11 @@ async fn display_task(
     // Create a new character style
     let text_style = TextStyleBuilder::new().baseline(Baseline::Top).build();
     let header_style = MonoTextStyle::new(&FONT_7X14, Rgb565::WHITE);
-    let body_style = MonoTextStyle::new(&FONT_5X7, Rgb565::WHITE);
+    let body_style = MonoTextStyleBuilder::new()
+        .font(&FONT_5X7)
+        .text_color(Rgb565::WHITE)
+        .background_color(Rgb565::BLACK)
+        .build();
 
     write!(&mut buf, "Interposer").unwrap();
     Text::with_text_style(&buf, Point::new(0,0), header_style, text_style)
