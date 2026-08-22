@@ -3,6 +3,10 @@
 use defmt::info;
 use embassy_usb::driver::{Driver, EndpointIn, EndpointOut, Endpoint};
 use embassy_usb::Builder;
+use embassy_usb::Handler;
+use embassy_usb::control::{InResponse, OutResponse, Recipient, RequestType};
+use core::sync::atomic::{AtomicBool, Ordering};
+use embassy_time::{with_timeout, Duration};
 
 const CBW_SIGNATURE: u32 = 0x4342_5355; // "USBC" little-endian
 const CSW_SIGNATURE: u32 = 0x5342_5355; // "USBS" little-endian
@@ -20,19 +24,57 @@ const SCSI_READ_CAPACITY_10:    u8 = 0x25;
 const SCSI_READ_10:             u8 = 0x28;
 const SCSI_WRITE_10:            u8 = 0x2A;
 
+/// Handles BOT class-specific control requests on behalf of the MSC interface.
+/// Must be registered with the USB builder via builder.handler() before build().
+pub struct MscControl;
+
+impl Handler for MscControl {
+    fn control_out(&mut self, req: embassy_usb::control::Request, _data: &[u8])
+            -> Option<OutResponse> {
+        // BOT Mass Storage Reset (class, interface, bRequest=0xFF)
+        // ACK it so Linux doesn't escalate to a USB device reset.
+        if req.request_type == RequestType::Class
+            && req.recipient == Recipient::Interface
+            && req.request == 0xFF
+        {
+            return Some(OutResponse::Accepted);
+        }
+        None
+    }
+
+    fn control_in<'a>(&'a mut self, req: embassy_usb::control::Request,
+                      buf: &'a mut [u8]) -> Option<InResponse<'a>> {
+        // Get Max LUN (class, interface, bRequest=0xFE) — single LUN, index 0.
+        if req.request_type == RequestType::Class
+            && req.recipient == Recipient::Interface
+            && req.request == 0xFE
+        {
+            buf[0] = 0;
+            return Some(InResponse::Accepted(&buf[..1]));
+        }
+        None
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum SenseState { Good, NotReady, UnitAttention }
+
 pub struct Msc<'d, D: Driver<'d>> {
     ep_out: D::EndpointOut,
     ep_in:  D::EndpointIn,
+    sense:  SenseState,
 }
 
 pub trait SdAccess {
     async fn read_sector(&mut self, lba: u32, buf: &mut [u8; 512]) -> bool;
     async fn write_sector(&mut self, lba: u32, buf: &[u8; 512]) -> bool;
     fn capacity_sectors(&self) -> u32;
+    fn is_present(&self) -> bool;
 }
 
 impl<'d, D: Driver<'d>> Msc<'d, D> {
-    pub fn new(builder: &mut Builder<'d, D>) -> Self {
+    pub fn new(builder: &mut Builder<'d, D>, control: &'d mut MscControl) -> Self {
+        builder.handler(control);
         let (ep_out, ep_in) = {
             let mut func = builder.function(0x08, 0x06, 0x50);
             let mut iface = func.interface();
@@ -41,7 +83,7 @@ impl<'d, D: Driver<'d>> Msc<'d, D> {
             let ep_in  = alt.endpoint_bulk_in(None, 512);
             (ep_out, ep_in)
         };
-        Self { ep_out, ep_in }
+        Self { ep_out, ep_in, sense: SenseState::UnitAttention }
     }
 
     pub async fn run<S: SdAccess>(&mut self, sd: &mut S) {
@@ -78,6 +120,63 @@ impl<'d, D: Driver<'d>> Msc<'d, D> {
             csw[8..12].copy_from_slice(&0u32.to_le_bytes());
             csw[12] = status;
             let _ = self.write_all(&csw).await;
+            if !sd.is_present() {
+                info!("MSC: card removed");
+                return;
+            }
+        }
+    }
+
+    pub fn signal_unit_attention(&mut self) {
+        self.sense = SenseState::UnitAttention;
+    }
+
+    pub async fn run_no_card(&mut self, card_present: &AtomicBool) {
+        self.sense = SenseState::NotReady;
+        loop {
+            if card_present.load(Ordering::Relaxed) { return; }
+
+            let mut cbw = [0u8; 512];
+            let n = match with_timeout(
+                Duration::from_millis(200),
+                self.ep_out.read(&mut cbw)
+            ).await {
+                Ok(Ok(n))  => n,
+                Ok(Err(_)) => { self.ep_out.wait_enabled().await; continue; }
+                Err(_)     => continue,  // timeout — recheck card_present
+            };
+
+            if n < 31 { continue; }
+            let sig = u32::from_le_bytes(cbw[0..4].try_into().unwrap());
+            if sig != CBW_SIGNATURE { continue; }
+
+            let tag    = u32::from_le_bytes(cbw[4..8].try_into().unwrap());
+            let length = u32::from_le_bytes(cbw[8..12].try_into().unwrap());
+            let cb_len = (cbw[14] & 0x1F) as usize;
+            let cb     = &cbw[15..15 + cb_len.min(16)];
+
+            // REQUEST_SENSE succeeds (CSW_OK) and returns NOT READY sense data.
+            // All other commands fail (CSW_FAIL).  Returning CSW_FAIL for
+            // REQUEST_SENSE itself tells Linux the sense request is broken,
+            // which triggers an endless BOT-reset → USB-reset loop.
+            let status = if cb[0] == SCSI_REQUEST_SENSE && cbw[12] & 0x80 != 0 {
+                let mut r = [0u8; 18];
+                r[0] = 0x70;
+                r[2] = 0x02; r[12] = 0x3A;  // NOT READY, medium not present
+                r[7] = 10;
+                let n = (length as usize).min(r.len());
+                let _ = self.write_all(&r[..n]).await;
+                CSW_OK
+            } else {
+                CSW_FAIL
+            };
+
+            let mut csw = [0u8; 13];
+            csw[0..4].copy_from_slice(&CSW_SIGNATURE.to_le_bytes());
+            csw[4..8].copy_from_slice(&tag.to_le_bytes());
+            csw[8..12].copy_from_slice(&0u32.to_le_bytes());
+            csw[12] = status;
+            let _ = self.write_all(&csw).await;
         }
     }
 
@@ -85,7 +184,17 @@ impl<'d, D: Driver<'d>> Msc<'d, D> {
             (&mut self, cb: &[u8], flags: u8, length: u32, sd: &mut S) -> u8 {
         let dir_in = flags & 0x80 != 0;
         match cb[0] {
-            SCSI_TEST_UNIT_READY => CSW_OK,
+            SCSI_TEST_UNIT_READY => {
+                if self.sense == SenseState::UnitAttention {
+                    CSW_FAIL  // leave sense for REQUEST_SENSE to read and clear
+                } else if !sd.is_present() {
+                    self.sense = SenseState::NotReady;
+                    CSW_FAIL
+                } else {
+                    self.sense = SenseState::Good;
+                    CSW_OK
+                }
+            }
             SCSI_INQUIRY => {
                 info!("MSC: INQUIRY");
                 if dir_in {
@@ -108,7 +217,16 @@ impl<'d, D: Driver<'d>> Msc<'d, D> {
                 if dir_in {
                     let mut r = [0u8; 18];
                     r[0] = 0x70;    // current errors
-                    r[2] = 0x00;    // no sense
+                    match self.sense {
+                        SenseState::Good          => { r[2] = 0x00; }
+                        SenseState::NotReady      => {
+                            r[2] = 0x02; r[12] = 0x3A; // medium not present
+                        }
+                        SenseState::UnitAttention => {
+                            r[2] = 0x06; r[12] = 0x28; // medium changed
+                        }
+                    }
+                    self.sense = SenseState::Good;  // clear after reading
                     r[7] = 10;
                     let n = (length as usize).min(r.len());
                     let _ = self.write_all(&r[..n]).await;
@@ -126,6 +244,10 @@ impl<'d, D: Driver<'d>> Msc<'d, D> {
             }
             SCSI_START_STOP_UNIT | SCSI_PREVENT_ALLOW => CSW_OK,
             SCSI_READ_CAPACITY_10 => {
+                if !sd.is_present() {
+                    self.sense = SenseState::NotReady;
+                    return CSW_FAIL;
+                }
                 info!("MSC: READ CAPACITY(10)");
                 let last_lba = sd.capacity_sectors() - 1;
                 let mut r = [0u8; 8];
@@ -141,9 +263,11 @@ impl<'d, D: Driver<'d>> Msc<'d, D> {
                 let mut buf = [0u8; 512];
                 for i in 0..sectors {
                     if !sd.read_sector(lba + i as u32, &mut buf).await {
+                        self.sense = SenseState::NotReady;
                         return CSW_FAIL;
                     }
                     if self.write_all(&buf).await.is_err() {
+                        self.sense = SenseState::NotReady;
                         return CSW_FAIL;
                     }
                 }
@@ -156,9 +280,11 @@ impl<'d, D: Driver<'d>> Msc<'d, D> {
                 let mut buf = [0u8; 512];
                 for i in 0..sectors {
                     if self.read_sector_buf(&mut buf).await.is_err() {
+                        self.sense = SenseState::NotReady;
                         return CSW_FAIL;
                     }
                     if !sd.write_sector(lba + i as u32, &buf).await {
+                        self.sense = SenseState::NotReady;
                         return CSW_FAIL;
                     }
                 }

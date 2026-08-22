@@ -4,7 +4,7 @@
 use defmt::info;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
-use core::sync::atomic::{AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use embassy_futures::select::{select, Either};
 
@@ -81,7 +81,8 @@ use aligned::{Aligned, A4};
 use panic_probe as _;
 
 mod msc;
-static MSC: StaticCell<msc::Msc<'static, HsDriver>> = StaticCell::new();
+static MSC:         StaticCell<msc::Msc<'static, HsDriver>> = StaticCell::new();
+static MSC_CONTROL: StaticCell<msc::MscControl>             = StaticCell::new();
 
 defmt::timestamp!("{=u64:us}", embassy_time::Instant::now().as_micros());
 
@@ -142,6 +143,8 @@ static HID_KEYBOARD_REPORT_DESC: &[u8] = &[
     0xC0,        // End Collection
 ];
 
+static CARD_PRESENT: AtomicBool = AtomicBool::new(false);
+
 struct OtgFsHostIrq;
 
 struct MscSd<'a, 'b> {
@@ -159,6 +162,9 @@ impl<'a, 'b> msc::SdAccess for MscSd<'a, 'b> {
             buf[i*4..i*4+4].copy_from_slice(&word.to_le_bytes());
         }
         true
+    }
+    fn is_present(&self) -> bool {
+        CARD_PRESENT.load(Ordering::Relaxed)
     }
     async fn write_sector(&mut self, lba: u32, buf: &[u8; 512]) -> bool {
         let mut block = DataBlock::new();
@@ -250,7 +256,8 @@ async fn main(spawner: Spawner) {
     );
 
     info!("creating MSC");
-    let msc = msc::Msc::new(&mut builder);
+    let msc_control = MSC_CONTROL.init(msc::MscControl);
+    let msc = msc::Msc::new(&mut builder, msc_control);
 
 
     let hid_config = HidConfig {
@@ -266,7 +273,6 @@ async fn main(spawner: Spawner) {
     let hid_writer = HidWriter::<_, 8>::new(&mut builder, hid_state, hid_config);
     info!("building USB Device");
     let usb_device = builder.build();
-    info!("spawning tasks");
 
     let _dm = {
         let mut pin = Flex::new(p.PA11);
@@ -302,6 +308,8 @@ async fn main(spawner: Spawner) {
     pac::RCC.apb2enr().modify(|w| w.set_usbphycen(true));
     unsafe { init_otgphyc(); }
     info!("spawning tasks");
+    spawner.spawn(cdet_task(p.PE3).unwrap());
+    info!("cdet spawned");
     spawner.spawn(usb_task(usb_device).unwrap());
     info!("usb spawned");
 
@@ -640,27 +648,43 @@ async fn msc_task(
     clk:    Peri<'static, embassy_stm32::peripherals::PC12>,
     cmd:    Peri<'static, embassy_stm32::peripherals::PD2>,
     d0:     Peri<'static, embassy_stm32::peripherals::PC8>,
-    _d1:     Peri<'static, embassy_stm32::peripherals::PC9>,
-    _d2:     Peri<'static, embassy_stm32::peripherals::PC10>,
-    _d3:     Peri<'static, embassy_stm32::peripherals::PC11>,
+    _d1:    Peri<'static, embassy_stm32::peripherals::PC9>,
+    _d2:    Peri<'static, embassy_stm32::peripherals::PC10>,
+    _d3:    Peri<'static, embassy_stm32::peripherals::PC11>,
 ) {
     info!("MSC task started");
     let mut sd_hw = Sdmmc::new_1bit(sdmmc, dma, Irqs, clk, cmd, d0,
                                     SdmmcConfig::default());
     let mut cmd_block = CmdBlock::new();
-    embassy_time::Timer::after_millis(500).await;
     loop {
+        // wait for card present (PE3 low), poll every 50ms
+        while !CARD_PRESENT.load(Ordering::Relaxed) {
+            Timer::after_millis(50).await;
+        }
+        Timer::after_millis(100).await; // debounce
+
         match StorageDevice::new_sd_card(&mut sd_hw, &mut cmd_block,
                                          Hertz(12_000_000)).await {
             Ok(dev) => {
                 let capacity = (dev.card().size() / 512) as u32;
+                msc.signal_unit_attention();
                 let mut sd = MscSd { dev, capacity };
                 msc.run(&mut sd).await;
+                msc.run_no_card(&CARD_PRESENT).await;
             }
             Err(e) => {
                 info!("MSC: SD init failed: {:?}", e);
-                embassy_time::Timer::after_millis(1000).await;
+                embassy_time::Timer::after_millis(500).await;
             }
         }
+    }
+}
+
+#[embassy_executor::task]
+async fn cdet_task(cdet: Peri<'static, embassy_stm32::peripherals::PE3>) {
+    let pin = Input::new(cdet, Pull::None);
+    loop {
+        CARD_PRESENT.store(pin.is_low(), Ordering::Relaxed);
+        Timer::after_millis(100).await;
     }
 }
