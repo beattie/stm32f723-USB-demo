@@ -36,11 +36,23 @@ holes = [
     [36.85, 76.90 ],   // bottom-right
 ];
 
+mounting_pins = false;	// true pins on top of standoffs or screw holes
+
 module standoff(x, y) {
     translate([margin + x, margin + y, plate_thick]) {
-        cylinder(h=standoff_h, d=standoff_d, $fn=36);
-        translate([0, 0, standoff_h])
-            cylinder(h=pin_h, d=pin_d, $fn=36);
+		if (mounting_pins) {
+			union() {
+        		cylinder(h=standoff_h, d=standoff_d, $fn=36);
+        		translate([0, 0, standoff_h])
+            		cylinder(h=pin_h, d=pin_d, $fn=36);
+			}
+		} else {
+			difference() {
+        		cylinder(h=standoff_h, d=standoff_d, $fn=36);
+        		translate([0, 0, 0])
+            		cylinder(h=pin_h + standoff_h, d=pin_d, $fn=36);
+			}
+		}
     }
 }
 
@@ -56,7 +68,7 @@ module keeper()
 			cube([display_w - 3.25, 8, 2.5], center = true);
 	}
 	translate([0, -display_t - 2.5, -4])
-		cube([extension_w, 2, 7], center=true);
+		cube([extension_w, 2, 3], center=true);
 	translate([extension_l - 1.5, 0, -4])
 		cube([1.5, 4, 6], center = true);
 	translate([-extension_l + 1.5, 0, -4])
@@ -78,21 +90,20 @@ module display()
 	// Display extension
 	translate([plate_w - 0.1, plate_l - extension_l, 0]) {
 		cube([extension_w + 0.1, extension_l, plate_thick]);
-		translate([0, 0, plate_thick]) difference() {
-			union() {
-				translate([0, extension_l - display_t - 8, 0])
+		translate([0, 0, -5]) rotate([15, 0, 0]) {
+			translate([0, 0, plate_thick]) difference() {
+				union() {
+					translate([0, extension_l - display_t - 8, 0])
+							cube([5, display_t + 8, display_h + 3]);
+					translate([extension_w - 5,
+							extension_l - display_t - 8, 0])
 						cube([5, display_t + 8, display_h + 3]);
-				translate([extension_w - 5,
-						extension_l - display_t - 8, 0])
-					cube([5, display_t + 8, display_h + 3]);
+				}
+				translate([2.75, extension_l - 9, 0])
+					cube([display_w+0.5, display_t + 0.5, display_h+5]);
 			}
-			translate([2.5, extension_l - 9, 0])
-				cube([display_w+1, display_t + 0.5, display_h+5]);
 		}
 	}
-	%translate([extension_w/2 + plate_w ,
-			extension_l/2 + board_h - (display_t + 8)/2 - 5.7,
-			display_h + 7]) keeper();
 }
 
 base_plate();

@@ -265,7 +265,7 @@ async fn main(spawner: Spawner) {
     let hid_config = HidConfig {
         report_descriptor: HID_KEYBOARD_REPORT_DESC,
         request_handler: None,
-        poll_ms: 10,
+        poll_ms: 1,
         max_packet_size: 8,
         hid_subclass: HidSubclass::Boot,
         hid_boot_protocol: HidBootProtocol::Keyboard,
@@ -411,22 +411,51 @@ async fn kbd_task(
                 }
                 Either::Second(Ok(HandlerEvent::HandlerEvent(
                             KbdEvent::KeyStatusUpdate(update)))) => {
-                    match pm.handle_key(update.modifiers, &update.keypress) {
-                        pm::PmAction::Passthrough => {
-                            let mut report = [0u8; 8];
-                            report[0] = update.modifiers;
-                            for (i, k) in update.keypress.iter().enumerate() {
-                                report[2 + i] = k.map_or(0, |v| v.get());
-                            }
-                            let _ = hid.write(&report).await;
+                    let eff = pm.handle_key(update.modifiers, &update.keypress);
+                    if eff.forward {
+                        let mut report = [0u8; 8];
+                        report[0] = update.modifiers;
+                        for (i, k) in update.keypress.iter().enumerate() {
+                            report[2 + i] = k.map_or(0, |v| v.get());
                         }
-                        pm::PmAction::Swallow => {}
-                        pm::PmAction::UpdateDisplay => {
-                            let mut s: heapless::String<26> = heapless::
-                                String::new();
-                            write!(s, "{}", pm.mode.label()).ok();
-                            DISPLAY_CHANNEL.send(DisplayCmd::WriteLine(28, s))
-                                .await;
+                        let _ = hid.write(&report).await;
+                    } else {
+                        // Erase n chars from host field: BS-SPC-BS per char
+                        for _ in 0..eff.erase {
+                            for code in [pm::HID_BS, pm::HID_SPACE, pm::HID_BS] {
+                                let mut r = [0u8; 8];
+                                r[2] = code;
+                                let _ = hid.write(&r).await;
+                                let _ = hid.write(&[0u8; 8]).await;
+                            }
+                        }
+                        // Type text character by character
+                        for c in eff.text.chars() {
+                            if let Some((code, modifier)) = pm::char_to_hid(c) {
+                                let mut r = [0u8; 8];
+                                r[0] = modifier;
+                                r[2] = code;
+                                let _ = hid.write(&r).await;
+                                let _ = hid.write(&[0u8; 8]).await;
+                            }
+                        }
+                        // Send Tab or Enter if requested
+                        if let Some(code) = eff.send_key {
+                            let mut r = [0u8; 8];
+                            r[2] = code;
+                            let _ = hid.write(&r).await;
+                            let _ = hid.write(&[0u8; 8]).await;
+                        }
+                        // Update display rows
+                        if let Some(text) = eff.disp28 {
+                            let mut s: heapless::String<26> = heapless::String::new();
+                            write!(s, "{:<21}", text).ok();
+                            DISPLAY_CHANNEL.send(DisplayCmd::WriteLine(28, s)).await;
+                        }
+                        if let Some(text) = eff.disp36 {
+                            let mut s: heapless::String<26> = heapless::String::new();
+                            write!(s, "{:<21}", text).ok();
+                            DISPLAY_CHANNEL.send(DisplayCmd::WriteLine(36, s)).await;
                         }
                     }
                 }
